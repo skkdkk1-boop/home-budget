@@ -1,0 +1,287 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #f6f8fb;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f6;
+  --surface-blue: #eef5ff;
+  --border: #e5e8eb;
+  --border-strong: #d1d6db;
+  --text-primary: #191f28;
+  --text-secondary: #4e5968;
+  --text-muted: #8b95a1;
+  --primary: #3182f6;
+  --primary-hover: #2272eb;
+  --success: #0f9f6d;
+  --warning: #c47b14;
+  --danger: #e24b4b;
+  --info: #3182f6;
+  --radius-surface: 20px;
+  --radius-card: 15px;
+  --radius-control: 9px;
+  --radius-compact: 8px;
+  --radius-pill: 999px;
+  --shadow-card: 0 18px 44px -36px rgba(15, 23, 42, 0.24);
+  --shadow-card-strong: 0 28px 54px -42px rgba(15, 23, 42, 0.26);
+  --shadow-primary: 0 18px 28px -18px rgba(49, 130, 246, 0.46);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    linear-gradient(180deg, #fafbfd 0%, var(--background) 100%);
+  color: var(--text-primary);
+  font-family:
+    "Pretendard Variable",
+    "Pretendard",
+    "Noto Sans KR",
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 18%, white);
+  color: var(--text-primary);
+}
+
+@layer components {
+  .planner-shell {
+    @apply mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-28 pt-7 sm:gap-7 sm:px-6 lg:px-10 lg:pb-14 lg:pt-8;
+  }
+
+  .page-shell {
+    @apply flex flex-col gap-6 sm:gap-7;
+  }
+
+  .radius-surface {
+    border-radius: var(--radius-surface);
+  }
+
+  .radius-card {
+    border-radius: var(--radius-card);
+  }
+
+  .radius-control {
+    border-radius: var(--radius-control);
+  }
+
+  .radius-compact {
+    border-radius: var(--radius-compact);
+  }
+
+  .radius-pill {
+    border-radius: var(--radius-pill);
+  }
+
+  .planner-card {
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, white);
+    box-shadow: var(--shadow-card);
+  }
+
+  .planner-card-strong {
+    box-shadow: var(--shadow-card-strong);
+  }
+
+  .planner-hero-card {
+    background:
+      radial-gradient(
+        circle at top right,
+        color-mix(in srgb, var(--primary) 13%, white) 0%,
+        transparent 42%
+      ),
+      var(--surface);
+    border: 1px solid color-mix(in srgb, var(--primary) 8%, var(--border));
+  }
+
+  .planner-panel-muted {
+    background: var(--surface-muted);
+    border: 1px solid color-mix(in srgb, var(--border) 82%, white);
+    border-radius: var(--radius-card);
+  }
+
+  .planner-panel-blue {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-blue) 78%, white) 0%,
+      var(--surface-blue) 100%
+    );
+    border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border));
+    border-radius: var(--radius-card);
+  }
+
+  .planner-mobile-card {
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, white);
+    box-shadow: var(--shadow-card);
+    border-radius: var(--radius-card);
+  }
+
+  .planner-link {
+    color: var(--primary);
+    transition: color 160ms ease;
+  }
+
+  .planner-link:hover {
+    color: var(--primary-hover);
+  }
+
+  .table-shell {
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    border: 1px solid color-mix(in srgb, var(--border) 90%, white);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .data-table thead {
+    background: color-mix(in srgb, var(--surface-muted) 88%, white);
+  }
+
+  .data-table th {
+    padding: 1rem 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.45;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 1.0625rem 1.5rem;
+    color: var(--text-secondary);
+    vertical-align: middle;
+    line-height: 1.5;
+  }
+
+  .data-table th:first-child,
+  .data-table td:first-child {
+    padding-left: 1.75rem;
+  }
+
+  .data-table th:last-child,
+  .data-table td:last-child {
+    padding-right: 1.75rem;
+  }
+
+  .data-table tbody td {
+    border-top: 1px solid color-mix(in srgb, var(--border) 92%, white);
+  }
+
+  .data-table tbody tr {
+    transition: background-color 160ms ease;
+  }
+
+  .data-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--surface-blue) 34%, var(--surface));
+  }
+
+  .table-col-left {
+    text-align: left;
+  }
+
+  .table-col-center {
+    text-align: center;
+  }
+
+  .table-col-right {
+    text-align: right;
+  }
+
+  .table-col-status {
+    width: 7.75rem;
+    text-align: left;
+  }
+
+  .table-col-link {
+    width: 5.25rem;
+    text-align: center;
+  }
+
+  .table-col-actions {
+    width: 9rem;
+    text-align: center;
+  }
+
+  .table-col-qty {
+    width: 5rem;
+    text-align: center;
+  }
+
+  .table-col-amount {
+    width: 10rem;
+    text-align: right;
+  }
+
+  .table-col-payment {
+    width: 11.25rem;
+    text-align: left;
+  }
+
+  .table-col-date {
+    width: 8rem;
+    text-align: center;
+  }
+
+  .table-actions {
+    @apply flex items-center justify-center gap-1.5;
+    flex-wrap: nowrap;
+  }
+
+  .planner-dialog {
+    border-top-left-radius: var(--radius-surface);
+    border-top-right-radius: var(--radius-surface);
+  }
+
+  .planner-tab {
+    border-radius: var(--radius-control);
+    white-space: nowrap;
+  }
+
+  .planner-indicator {
+    border-radius: var(--radius-pill);
+  }
+
+  .table-action-button {
+    min-width: 3.625rem;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 640px) {
+  .planner-dialog {
+    border-radius: var(--radius-surface);
+  }
+}
