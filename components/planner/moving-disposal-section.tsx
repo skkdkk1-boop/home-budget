@@ -22,6 +22,7 @@ import {
   formatCurrency,
   formatDate,
   keepVisibleSelections,
+  parseMoneyInput,
   toggleAllVisibleSelections,
   toggleSelectionItem,
 } from "@/lib/planner-utils";
@@ -35,6 +36,7 @@ import {
   EmptyState,
   Field,
   FormDialog,
+  MoneyInput,
   RowActionMenu,
   SectionHeader,
   SelectionCheckbox,
@@ -45,13 +47,17 @@ import {
   TextInput,
 } from "./ui";
 
-function createEmptyDisposalForm(): DisposalItemFormValues {
+type DisposalFormState = Omit<DisposalItemFormValues, "disposalCost"> & {
+  disposalCost: string;
+};
+
+function createEmptyDisposalForm(): DisposalFormState {
   return {
     name: "",
     currentLocation: SELL_LOCATION_OPTIONS[0],
     disposalMethod: "",
     reservationRequired: false,
-    disposalCost: 0,
+    disposalCost: "",
     disposalDate: "",
     status: "planned",
     note: "",
@@ -72,7 +78,7 @@ export function MovingDisposalSection() {
   const [locationFilter, setLocationFilter] = useState<SellLocation | "all">("all");
   const [statusFilter, setStatusFilter] = useState<DisposalStatus | "all">("all");
   const [sortBy, setSortBy] = useState<DisposalItemSortOption>("recent");
-  const [form, setForm] = useState<DisposalItemFormValues>(createEmptyDisposalForm);
+  const [form, setForm] = useState<DisposalFormState>(createEmptyDisposalForm);
 
   const filteredItems = useMemo(() => {
     const nextItems = data.disposalItems.filter((item) => {
@@ -102,7 +108,10 @@ export function MovingDisposalSection() {
     return nextItems;
   }, [data.disposalItems, locationFilter, sortBy, statusFilter]);
 
-  const visibleIds = filteredItems.map((item) => item.id);
+  const visibleIds = useMemo(
+    () => filteredItems.map((item) => item.id),
+    [filteredItems],
+  );
   const selectedVisibleCount = visibleIds.filter((id) => selectedIds.includes(id)).length;
   const isAllVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
@@ -114,7 +123,18 @@ export function MovingDisposalSection() {
   }, [data.disposalItems]);
 
   useEffect(() => {
-    setSelectedIds((current) => keepVisibleSelections(current, visibleIds));
+    setSelectedIds((current) => {
+      const next = keepVisibleSelections(current, visibleIds);
+
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
   }, [visibleIds]);
 
   const startCreate = () => {
@@ -130,7 +150,7 @@ export function MovingDisposalSection() {
       currentLocation: item.currentLocation,
       disposalMethod: item.disposalMethod,
       reservationRequired: item.reservationRequired,
-      disposalCost: item.disposalCost,
+      disposalCost: String(item.disposalCost),
       disposalDate: item.disposalDate,
       status: item.status,
       note: item.note,
@@ -141,10 +161,15 @@ export function MovingDisposalSection() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const nextInput: DisposalItemFormValues = {
+      ...form,
+      disposalCost: parseMoneyInput(form.disposalCost),
+    };
+
     if (editingItem) {
-      updateDisposalItem(editingItem.id, form);
+      updateDisposalItem(editingItem.id, nextInput);
     } else {
-      addDisposalItem(form);
+      addDisposalItem(nextInput);
     }
 
     setIsDialogOpen(false);
@@ -260,7 +285,7 @@ export function MovingDisposalSection() {
                             aria-label="현재 목록 전체 선택"
                             checked={isAllVisibleSelected}
                             indeterminate={isSomeVisibleSelected}
-                            onChange={toggleSelectAll}
+                            onChange={() => toggleSelectAll()}
                           />
                         </div>
                       </th>
@@ -496,17 +521,13 @@ export function MovingDisposalSection() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="폐기 비용">
-              <TextInput
+              <MoneyInput
                 required
-                inputMode="numeric"
-                min="0"
-                step="1000"
-                type="number"
                 value={form.disposalCost}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   setForm((current) => ({
                     ...current,
-                    disposalCost: Number(event.target.value),
+                    disposalCost: value,
                   }))
                 }
               />

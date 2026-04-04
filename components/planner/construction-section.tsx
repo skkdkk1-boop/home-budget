@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   Construction,
   ConstructionFormValues,
+  Purchase,
+  PurchaseFormValues,
   Room,
 } from "@/lib/planner-types";
 import {
@@ -15,9 +17,12 @@ import {
   ROOM_OPTIONS,
 } from "@/lib/planner-types";
 import {
+  deriveConstructionsFromPurchases,
   formatCurrency,
   formatDate,
   keepVisibleSelections,
+  mapConstructionStatusToPurchaseStatus,
+  parseMoneyInput,
   sortConstructionsByDate,
   toggleAllVisibleSelections,
   toggleSelectionItem,
@@ -34,6 +39,7 @@ import {
   Field,
   FormDialog,
   LoadingState,
+  MoneyInput,
   RowActionMenu,
   SelectionCheckbox,
   SectionHeader,
@@ -47,15 +53,26 @@ import {
   ValuePreviewPanel,
 } from "./ui";
 
-function createEmptyConstructionForm(): ConstructionFormValues {
+type ConstructionFormState = Omit<
+  ConstructionFormValues,
+  "constructionTotalCost" | "constructionDeposit" | "constructionBalance"
+> & {
+  constructionTotalCost: string;
+  constructionDeposit: string;
+  constructionBalance: string;
+};
+
+function createEmptyConstructionForm(): ConstructionFormState {
   return {
     name: "",
     room: ROOM_OPTIONS[0],
     constructionStatus: CONSTRUCTION_STATUS_OPTIONS[0],
     constructionDate: todayKey(),
-    cost: 0,
-    company: "",
-    contact: "",
+    constructionStartTime: "",
+    constructionCompany: "",
+    constructionTotalCost: "",
+    constructionDeposit: "",
+    constructionBalance: "",
     note: "",
   };
 }
@@ -64,16 +81,14 @@ export function ConstructionSection() {
   const {
     data,
     isReady,
-    addConstruction,
-    updateConstruction,
-    deleteConstruction,
-    deleteConstructions,
+    addPurchase,
+    updatePurchase,
   } = usePlannerData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingConstruction, setEditingConstruction] =
     useState<Construction | null>(null);
   const [form, setForm] =
-    useState<ConstructionFormValues>(createEmptyConstructionForm);
+    useState<ConstructionFormState>(createEmptyConstructionForm);
   const [selectedConstructionIds, setSelectedConstructionIds] = useState<
     string[]
   >([]);
@@ -91,9 +106,17 @@ export function ConstructionSection() {
         room: editingConstruction.room,
         constructionStatus: editingConstruction.constructionStatus,
         constructionDate: editingConstruction.constructionDate,
-        cost: editingConstruction.cost,
-        company: editingConstruction.company,
-        contact: editingConstruction.contact,
+        constructionStartTime: editingConstruction.constructionStartTime,
+        constructionCompany: editingConstruction.constructionCompany,
+        constructionTotalCost: editingConstruction.constructionTotalCost
+          ? String(editingConstruction.constructionTotalCost)
+          : "",
+        constructionDeposit: editingConstruction.constructionDeposit
+          ? String(editingConstruction.constructionDeposit)
+          : "",
+        constructionBalance: editingConstruction.constructionBalance
+          ? String(editingConstruction.constructionBalance)
+          : "",
         note: editingConstruction.note,
       });
       return;
@@ -103,10 +126,13 @@ export function ConstructionSection() {
   }, [editingConstruction, isDialogOpen]);
 
   const sortedConstructions = useMemo(
-    () => sortConstructionsByDate(data.constructions),
-    [data.constructions],
+    () => sortConstructionsByDate(deriveConstructionsFromPurchases(data.purchases)),
+    [data.purchases],
   );
-  const visibleConstructionIds = sortedConstructions.map((item) => item.id);
+  const visibleConstructionIds = useMemo(
+    () => sortedConstructions.map((item) => item.id),
+    [sortedConstructions],
+  );
   const selectedVisibleCount = visibleConstructionIds.filter((id) =>
     selectedConstructionIds.includes(id),
   ).length;
@@ -116,15 +142,70 @@ export function ConstructionSection() {
   const isSomeVisibleSelected =
     selectedVisibleCount > 0 && !isAllVisibleSelected;
   const today = todayKey();
-  const activeCount = data.constructions.filter(
+  const activeCount = sortedConstructions.filter(
     (item) => item.constructionStatus !== "done" && item.constructionDate >= today,
   ).length;
-  const completedCount = data.constructions.filter(
+  const completedCount = sortedConstructions.filter(
     (item) => item.constructionStatus === "done",
   ).length;
-  const activeCost = data.constructions.reduce((sum, item) => {
-    return item.constructionStatus !== "done" ? sum + item.cost : sum;
+  const activeCost = sortedConstructions.reduce((sum, item) => {
+    return item.constructionStatus !== "done"
+      ? sum + item.constructionTotalCost
+      : sum;
   }, 0);
+  const detailRoomOptions = useMemo(() => {
+    if (ROOM_OPTIONS.includes(form.room as Room)) {
+      return ROOM_OPTIONS;
+    }
+
+    return [...ROOM_OPTIONS, form.room] as const;
+  }, [form.room]);
+  const buildPurchaseInput = (
+    basePurchase: Purchase | null,
+    overrides: Partial<ConstructionFormValues & { constructionRequired: boolean }>,
+  ): PurchaseFormValues => {
+    const constructionRequired =
+      overrides.constructionRequired ?? basePurchase?.constructionRequired ?? true;
+    const constructionTotalCost =
+      overrides.constructionTotalCost ?? basePurchase?.constructionTotalCost ?? 0;
+
+    return {
+    status:
+      overrides.constructionStatus !== undefined
+        ? mapConstructionStatusToPurchaseStatus(overrides.constructionStatus)
+        : basePurchase?.status ?? "planned",
+    room: overrides.room ?? basePurchase?.room ?? ROOM_OPTIONS[0],
+    category: constructionRequired ? "시공" : basePurchase?.category ?? "기타",
+    name: overrides.name ?? basePurchase?.name ?? "",
+    unitPrice: constructionRequired ? constructionTotalCost : basePurchase?.unitPrice ?? 0,
+    quantity: basePurchase?.quantity ?? 1,
+    paymentType: basePurchase?.paymentType ?? "lump",
+    installmentMonths:
+      basePurchase?.paymentType === "installment"
+        ? basePurchase.installmentMonths
+        : 12,
+    link: basePurchase?.link ?? "",
+    note: overrides.note ?? basePurchase?.note ?? "",
+    deliveryRequired: basePurchase?.deliveryRequired ?? false,
+    deliveryDate: basePurchase?.deliveryDate ?? "",
+    constructionRequired,
+    constructionStatus:
+      overrides.constructionStatus ?? basePurchase?.constructionStatus ?? "before",
+    constructionDate: overrides.constructionDate ?? basePurchase?.constructionDate ?? "",
+    constructionStartTime:
+      overrides.constructionStartTime ?? basePurchase?.constructionStartTime ?? "",
+    constructionCompany:
+      overrides.constructionCompany ?? basePurchase?.constructionCompany ?? "",
+    constructionTotalCost,
+    constructionDeposit:
+      overrides.constructionDeposit ?? basePurchase?.constructionDeposit ?? 0,
+    constructionBalance:
+      overrides.constructionBalance ?? basePurchase?.constructionBalance ?? 0,
+  };
+  };
+  const draftConstructionTotalCost = parseMoneyInput(form.constructionTotalCost);
+  const draftConstructionDeposit = parseMoneyInput(form.constructionDeposit);
+  const draftConstructionBalance = parseMoneyInput(form.constructionBalance);
 
   const startCreate = () => {
     setEditingConstruction(null);
@@ -139,10 +220,27 @@ export function ConstructionSection() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const existingPurchase = editingConstruction
+      ? data.purchases.find((item) => item.id === editingConstruction.id)
+      : null;
+    const nextInput = buildPurchaseInput(existingPurchase ?? null, {
+      name: form.name,
+      room: form.room,
+      note: form.note,
+      constructionRequired: true,
+      constructionStatus: form.constructionStatus,
+      constructionDate: form.constructionDate,
+      constructionStartTime: form.constructionStartTime,
+      constructionCompany: form.constructionCompany,
+      constructionTotalCost: parseMoneyInput(form.constructionTotalCost),
+      constructionDeposit: parseMoneyInput(form.constructionDeposit),
+      constructionBalance: parseMoneyInput(form.constructionBalance),
+    });
+
     if (editingConstruction) {
-      updateConstruction(editingConstruction.id, form);
+      updatePurchase(editingConstruction.id, nextInput);
     } else {
-      addConstruction(form);
+      addPurchase(nextInput);
     }
 
     setIsDialogOpen(false);
@@ -150,18 +248,43 @@ export function ConstructionSection() {
 
   const requestDelete = (construction: Construction) => {
     if (window.confirm(`"${construction.name}" 시공 항목을 삭제할까요?`)) {
-      deleteConstruction(construction.id);
+      const existingPurchase =
+        data.purchases.find((item) => item.id === construction.id) ?? null;
+
+      if (!existingPurchase) {
+        return;
+      }
+
+      updatePurchase(
+        construction.id,
+        buildPurchaseInput(existingPurchase, {
+          constructionRequired: false,
+          constructionStatus: undefined,
+          constructionDate: "",
+          constructionStartTime: "",
+          constructionCompany: "",
+          constructionTotalCost: 0,
+          constructionDeposit: 0,
+          constructionBalance: 0,
+        }),
+      );
     }
   };
 
   useEffect(() => {
-    setSelectedConstructionIds((current) =>
-      keepVisibleSelections(
-        current,
-        sortedConstructions.map((item) => item.id),
-      ),
-    );
-  }, [sortedConstructions]);
+    setSelectedConstructionIds((current) => {
+      const next = keepVisibleSelections(current, visibleConstructionIds);
+
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [visibleConstructionIds]);
 
   const toggleConstructionSelection = (constructionId: string) => {
     setSelectedConstructionIds((current) =>
@@ -193,7 +316,27 @@ export function ConstructionSection() {
         `선택한 ${selectedConstructionIds.length}개 항목을 삭제할까요?`,
       )
     ) {
-      deleteConstructions(selectedConstructionIds);
+      selectedConstructionIds.forEach((id) => {
+        const existingPurchase = data.purchases.find((item) => item.id === id) ?? null;
+
+        if (!existingPurchase) {
+          return;
+        }
+
+        updatePurchase(
+          id,
+          buildPurchaseInput(existingPurchase, {
+            constructionRequired: false,
+            constructionStatus: undefined,
+            constructionDate: "",
+            constructionStartTime: "",
+            constructionCompany: "",
+            constructionTotalCost: 0,
+            constructionDeposit: 0,
+            constructionBalance: 0,
+          }),
+        );
+      });
       clearConstructionSelection();
     }
   };
@@ -211,7 +354,7 @@ export function ConstructionSection() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           label="전체 시공 항목"
-          value={`${data.constructions.length}건`}
+          value={`${sortedConstructions.length}건`}
         />
         <SummaryCard
           label="예정 / 진행 중"
@@ -267,16 +410,16 @@ export function ConstructionSection() {
                               aria-label="현재 목록 전체 선택"
                               checked={isAllVisibleSelected}
                               indeterminate={isSomeVisibleSelected}
-                              onChange={toggleSelectAllConstructions}
+                              onChange={() => toggleSelectAllConstructions()}
                             />
                           </div>
                         </th>
                         <th className="table-col-status">상태</th>
                         <th className="table-col-left">시공명</th>
                         <th className="table-col-left">공간</th>
-                        <th className="table-col-date">시공일</th>
+                        <th className="table-col-date">일정</th>
                         <th className="table-col-amount">비용</th>
-                        <th className="table-col-left">업체 / 연락처</th>
+                        <th className="table-col-left">업체</th>
                         <th className="table-col-actions">
                           <span className="sr-only">행 동작</span>
                         </th>
@@ -323,18 +466,20 @@ export function ConstructionSection() {
                             {construction.room}
                           </td>
                           <td className="table-col-date text-[var(--text-primary)]">
-                            {formatDate(construction.constructionDate)}
+                            <div className="table-cell-stack items-center">
+                              <p>{formatDate(construction.constructionDate)}</p>
+                              <p className="table-cell-meta">
+                                {construction.constructionStartTime || "-"}
+                              </p>
+                            </div>
                           </td>
                           <td className="table-col-amount numeric-value font-semibold text-[var(--text-primary)]">
-                            {formatCurrency(construction.cost)}
+                            {formatCurrency(construction.constructionTotalCost)}
                           </td>
                           <td className="table-col-left text-[var(--text-secondary)]">
                             <div className="table-cell-stack max-w-[16rem] gap-1">
                               <p className="table-cell-title text-sm">
-                                {construction.company || "-"}
-                              </p>
-                              <p className="table-cell-meta">
-                                {construction.contact || "-"}
+                                {construction.constructionCompany || "-"}
                               </p>
                             </div>
                           </td>
@@ -342,8 +487,8 @@ export function ConstructionSection() {
                             <div className="table-action-slot">
                               <RowActionMenu
                                 description={
-                                  construction.company
-                                    ? `${construction.room} · ${construction.company}`
+                                  construction.constructionCompany
+                                    ? `${construction.room} · ${construction.constructionCompany}`
                                     : construction.room
                                 }
                                 label={construction.name}
@@ -397,29 +542,37 @@ export function ConstructionSection() {
                           </div>
                           <p className="mt-2 text-sm text-[var(--text-secondary)]">
                             {construction.room}
-                            {construction.company ? ` · ${construction.company}` : ""}
+                            {construction.constructionCompany
+                              ? ` · ${construction.constructionCompany}`
+                              : ""}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-[var(--text-primary)]">
                             {formatDate(construction.constructionDate)}
                           </p>
-                          <p className="mt-1 text-xs text-[var(--text-muted)]">시공일</p>
+                          <p className="mt-1 text-xs text-[var(--text-muted)]">
+                            {construction.constructionStartTime || "시작시간 미정"}
+                          </p>
                         </div>
                       </div>
 
                       <div className="mt-4 space-y-3">
                         <DetailRow
-                          label="비용"
+                          label="총금액"
                           value={
                             <span className="numeric-value">
-                              {formatCurrency(construction.cost)}
+                              {formatCurrency(construction.constructionTotalCost)}
                             </span>
                           }
                         />
                         <DetailRow
-                          label="연락처"
-                          value={construction.contact || "-"}
+                          label="계약금"
+                          value={formatCurrency(construction.constructionDeposit)}
+                        />
+                        <DetailRow
+                          label="잔금"
+                          value={formatCurrency(construction.constructionBalance)}
                         />
                         <DetailRow label="메모" value={construction.note || "-"} />
                       </div>
@@ -427,8 +580,8 @@ export function ConstructionSection() {
 
                     <RowActionMenu
                       description={
-                        construction.company
-                          ? `${construction.room} · ${construction.company}`
+                        construction.constructionCompany
+                          ? `${construction.room} · ${construction.constructionCompany}`
                           : construction.room
                       }
                       label={construction.name}
@@ -466,18 +619,18 @@ export function ConstructionSection() {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="공간">
               <SelectInput
                 value={form.room}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    room: event.target.value as Room,
+                    room: event.target.value as ConstructionFormValues["room"],
                   }))
                 }
               >
-                {ROOM_OPTIONS.map((room) => (
+                {detailRoomOptions.map((room) => (
                   <option key={room} value={room}>
                     {room}
                   </option>
@@ -500,67 +653,114 @@ export function ConstructionSection() {
                   <option key={status} value={status}>
                     {CONSTRUCTION_STATUS_LABELS[status]}
                   </option>
-                ))}
-              </SelectInput>
-            </Field>
-
-            <Field label="시공일">
-              <TextInput
-                required
-                type="date"
-                value={form.constructionDate}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    constructionDate: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+                  ))}
+                </SelectInput>
+              </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="비용">
-              <TextInput
-                inputMode="numeric"
-                min="0"
-                step="1000"
-                type="number"
-                value={form.cost}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    cost: Number(event.target.value),
-                  }))
-                }
-              />
-            </Field>
+          <div className="planner-panel-muted p-4">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">
+              시공 정보
+            </p>
 
-            <Field label="업체명">
-              <TextInput
-                placeholder="예: 화이트홈 인테리어"
-                value={form.company}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    company: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+            <div className="mt-4 grid gap-5">
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  📅 일정
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <Field label="날짜">
+                    <TextInput
+                      required
+                      type="date"
+                      value={form.constructionDate}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
 
-            <Field label="연락처">
-              <TextInput
-                placeholder="예: 010-1234-5678"
-                value={form.contact}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    contact: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+                  <Field label="시작시간">
+                    <TextInput
+                      type="time"
+                      value={form.constructionStartTime}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionStartTime: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  🏢 업체
+                </p>
+                <div className="mt-3 max-w-[18rem]">
+                  <Field label="업체명">
+                    <TextInput
+                      placeholder="예: 화이트홈"
+                      value={form.constructionCompany}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionCompany: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  💰 비용
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                  <Field label="총금액">
+                    <MoneyInput
+                      value={form.constructionTotalCost}
+                      onValueChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionTotalCost: value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="계약금">
+                    <MoneyInput
+                      value={form.constructionDeposit}
+                      onValueChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionDeposit: value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="잔금">
+                    <MoneyInput
+                      value={form.constructionBalance}
+                      onValueChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          constructionBalance: value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            </div>
           </div>
 
           <Field label="메모">
@@ -576,7 +776,20 @@ export function ConstructionSection() {
             />
           </Field>
 
-          <ValuePreviewPanel label="예상 비용" value={formatCurrency(form.cost)} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ValuePreviewPanel
+              label="총금액"
+              value={formatCurrency(draftConstructionTotalCost)}
+            />
+            <ValuePreviewPanel
+              label="계약금"
+              value={formatCurrency(draftConstructionDeposit)}
+            />
+            <ValuePreviewPanel
+              label="잔금"
+              value={formatCurrency(draftConstructionBalance)}
+            />
+          </div>
 
           <DialogActions
             onCancel={() => setIsDialogOpen(false)}

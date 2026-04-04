@@ -5,7 +5,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { buildSamplePlannerData } from "@/lib/planner-sample-data";
 import type {
-  ConstructionFormValues,
   DisposalItemFormValues,
   FundFormValues,
   MoveItemFormValues,
@@ -14,7 +13,6 @@ import type {
   PurchaseFormValues,
   SellItemStatus,
   SellItemFormValues,
-  ShippingFormValues,
 } from "@/lib/planner-types";
 import {
   EMPTY_PLANNER_DATA,
@@ -40,14 +38,6 @@ interface PlannerContextValue {
   updatePurchaseStatuses: (ids: string[], status: PurchaseStatus) => void;
   deletePurchase: (id: string) => void;
   deletePurchases: (ids: string[]) => void;
-  addShipping: (input: ShippingFormValues) => void;
-  updateShipping: (id: string, input: ShippingFormValues) => void;
-  deleteShipping: (id: string) => void;
-  deleteShippings: (ids: string[]) => void;
-  addConstruction: (input: ConstructionFormValues) => void;
-  updateConstruction: (id: string, input: ConstructionFormValues) => void;
-  deleteConstruction: (id: string) => void;
-  deleteConstructions: (ids: string[]) => void;
   addSellItem: (input: SellItemFormValues) => void;
   addSellItems: (inputs: SellItemFormValues[]) => void;
   updateSellItem: (id: string, input: SellItemFormValues) => void;
@@ -75,6 +65,9 @@ function normalizeFundInput(input: FundFormValues) {
 }
 
 function normalizePurchaseInput(input: PurchaseFormValues) {
+  const constructionTotalCost = normalizeAmount(input.constructionTotalCost, 0);
+  const constructionDeposit = normalizeAmount(input.constructionDeposit, 0);
+
   return {
     status: input.status,
     room: input.room,
@@ -84,32 +77,27 @@ function normalizePurchaseInput(input: PurchaseFormValues) {
     quantity: normalizeAmount(input.quantity, 1),
     paymentType: input.paymentType,
     installmentMonths: normalizeAmount(input.installmentMonths, 1),
-    scheduleDate: input.scheduleDate,
     link: normalizeLink(input.link),
     note: input.note.trim(),
-  };
-}
-
-function normalizeShippingInput(input: ShippingFormValues) {
-  return {
-    itemName: input.itemName.trim() || "이름 없는 배송",
-    room: input.room,
-    shippingStatus: input.shippingStatus,
-    expectedDate: input.expectedDate,
-    note: input.note.trim(),
-  };
-}
-
-function normalizeConstructionInput(input: ConstructionFormValues) {
-  return {
-    name: input.name.trim() || "이름 없는 시공",
-    room: input.room,
-    constructionStatus: input.constructionStatus,
-    constructionDate: input.constructionDate,
-    cost: normalizeAmount(input.cost, 0),
-    company: input.company.trim(),
-    contact: input.contact.trim(),
-    note: input.note.trim(),
+    deliveryRequired: input.deliveryRequired,
+    deliveryDate: input.deliveryRequired ? input.deliveryDate : "",
+    constructionRequired: input.constructionRequired,
+    constructionStatus: input.constructionRequired ? input.constructionStatus : undefined,
+    constructionDate: input.constructionRequired ? input.constructionDate : "",
+    constructionStartTime: input.constructionRequired
+      ? input.constructionStartTime
+      : "",
+    constructionCompany: input.constructionRequired
+      ? input.constructionCompany.trim()
+      : "",
+    constructionTotalCost: input.constructionRequired ? constructionTotalCost : 0,
+    constructionDeposit: input.constructionRequired ? constructionDeposit : 0,
+    constructionBalance: input.constructionRequired
+      ? normalizeAmount(
+          input.constructionBalance || Math.max(constructionTotalCost - constructionDeposit, 0),
+          0,
+        )
+      : 0,
   };
 }
 
@@ -314,86 +302,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const addShipping = (input: ShippingFormValues) => {
-    const nextShipping = createTimestampedEntity(
-      "shipping",
-      normalizeShippingInput(input),
-    );
-
-    setData((current) => ({
-      ...current,
-      shippings: [nextShipping, ...current.shippings],
-    }));
-  };
-
-  const updateShipping = (id: string, input: ShippingFormValues) => {
-    const now = new Date().toISOString();
-    const normalized = normalizeShippingInput(input);
-
-    setData((current) => ({
-      ...current,
-      shippings: updateEntitiesById(current.shippings, id, (item) => ({
-        ...item,
-        ...normalized,
-        updatedAt: now,
-      })),
-    }));
-  };
-
-  const deleteShipping = (id: string) => {
-    setData((current) => ({
-      ...current,
-      shippings: removeEntityById(current.shippings, id),
-    }));
-  };
-
-  const deleteShippings = (ids: string[]) => {
-    setData((current) => ({
-      ...current,
-      shippings: removeEntitiesByIds(current.shippings, ids),
-    }));
-  };
-
-  const addConstruction = (input: ConstructionFormValues) => {
-    const nextConstruction = createTimestampedEntity(
-      "construction",
-      normalizeConstructionInput(input),
-    );
-
-    setData((current) => ({
-      ...current,
-      constructions: [nextConstruction, ...current.constructions],
-    }));
-  };
-
-  const updateConstruction = (id: string, input: ConstructionFormValues) => {
-    const now = new Date().toISOString();
-    const normalized = normalizeConstructionInput(input);
-
-    setData((current) => ({
-      ...current,
-      constructions: updateEntitiesById(current.constructions, id, (item) => ({
-        ...item,
-        ...normalized,
-        updatedAt: now,
-      })),
-    }));
-  };
-
-  const deleteConstruction = (id: string) => {
-    setData((current) => ({
-      ...current,
-      constructions: removeEntityById(current.constructions, id),
-    }));
-  };
-
-  const deleteConstructions = (ids: string[]) => {
-    setData((current) => ({
-      ...current,
-      constructions: removeEntitiesByIds(current.constructions, ids),
-    }));
-  };
-
   const addSellItem = (input: SellItemFormValues) => {
     const nextSellItem = createTimestampedEntity(
       "sell-item",
@@ -556,14 +464,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         updatePurchaseStatuses,
         deletePurchase,
         deletePurchases,
-        addShipping,
-        updateShipping,
-        deleteShipping,
-        deleteShippings,
-        addConstruction,
-        updateConstruction,
-        deleteConstruction,
-        deleteConstructions,
         addSellItem,
         addSellItems,
         updateSellItem,

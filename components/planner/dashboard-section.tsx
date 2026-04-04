@@ -5,13 +5,12 @@ import Link from "next/link";
 import {
   CONSTRUCTION_STATUS_TONES,
   CONSTRUCTION_STATUS_LABELS,
-  SHIPPING_STATUS_TONES,
-  SHIPPING_STATUS_LABELS,
 } from "@/lib/planner-types";
 import {
   cn,
   formatCurrency,
   formatDate,
+  getDeliveryScheduleMeta,
   getProjectedRemainingInsight,
 } from "@/lib/planner-utils";
 
@@ -149,38 +148,44 @@ export function DashboardSection() {
             {summary.upcomingShippings.length === 0 ? (
               <EmptyState
                 title="예정된 배송이 없어요"
-                description="배송 관리를 열어서 주문 전 항목이나 예정일을 추가해보세요."
+                description="배송이 필요한 품목과 날짜를 입력하면 여기서 바로 확인할 수 있어요."
               />
             ) : (
               summary.upcomingShippings.map((item) => (
-                <div
-                  key={item.id}
-                  className="planner-panel-muted flex items-start justify-between gap-4 p-3.5"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-[var(--text-primary)] sm:text-base">
-                        {item.itemName}
-                      </p>
-                      <StatusBadge tone={SHIPPING_STATUS_TONES[item.shippingStatus]}>
-                        {SHIPPING_STATUS_LABELS[item.shippingStatus]}
-                      </StatusBadge>
+                (() => {
+                  const deliveryMeta = getDeliveryScheduleMeta(item.deliveryDate);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="planner-panel-muted flex items-start justify-between gap-4 p-3.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-[var(--text-primary)] sm:text-base">
+                            {item.itemName}
+                          </p>
+                          <StatusBadge tone={deliveryMeta.tone}>
+                            {deliveryMeta.label}
+                          </StatusBadge>
+                        </div>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                          {item.room}
+                        </p>
+                        {item.note ? (
+                          <p className="mt-1.5 text-sm leading-6 text-[var(--text-secondary)]">
+                            {item.note}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          {formatDate(item.deliveryDate)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                      {item.room}
-                    </p>
-                    {item.note ? (
-                      <p className="mt-1.5 text-sm leading-6 text-[var(--text-secondary)]">
-                        {item.note}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">
-                      {formatDate(item.expectedDate)}
-                    </p>
-                  </div>
-                </div>
+                  );
+                })()
               ))
             )}
           </div>
@@ -222,22 +227,25 @@ export function DashboardSection() {
                     </div>
                     <p className="mt-1 text-sm text-[var(--text-secondary)]">
                       {item.room}
-                      {item.company ? ` · ${item.company}` : ""}
+                      {item.constructionCompany ? ` · ${item.constructionCompany}` : ""}
                     </p>
                     <p
                       className={cn(
                         "mt-1.5 text-sm font-semibold",
-                        item.cost > 0
+                        item.constructionTotalCost > 0
                           ? "text-[var(--text-primary)]"
                           : "text-[var(--text-muted)]",
                       )}
                     >
-                      {formatCurrency(item.cost)}
+                      {formatCurrency(item.constructionTotalCost)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-[var(--text-primary)]">
                       {formatDate(item.constructionDate)}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      {item.constructionStartTime || "시작시간 미정"}
                     </p>
                   </div>
                 </div>

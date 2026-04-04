@@ -95,14 +95,28 @@ export function MovingTransferSection() {
     return nextItems;
   }, [data.moveItems, locationFilter, sortBy, statusFilter]);
 
-  const visibleIds = filteredItems.map((item) => item.id);
+  const visibleIds = useMemo(
+    () => filteredItems.map((item) => item.id),
+    [filteredItems],
+  );
   const selectedVisibleCount = visibleIds.filter((id) => selectedIds.includes(id)).length;
   const isAllVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const isSomeVisibleSelected = selectedVisibleCount > 0 && !isAllVisibleSelected;
 
   useEffect(() => {
-    setSelectedIds((current) => keepVisibleSelections(current, visibleIds));
+    setSelectedIds((current) => {
+      const next = keepVisibleSelections(current, visibleIds);
+
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
   }, [visibleIds]);
 
   const startCreate = () => {
@@ -244,7 +258,7 @@ export function MovingTransferSection() {
                             aria-label="현재 목록 전체 선택"
                             checked={isAllVisibleSelected}
                             indeterminate={isSomeVisibleSelected}
-                            onChange={toggleSelectAll}
+                            onChange={() => toggleSelectAll()}
                           />
                         </div>
                       </th>

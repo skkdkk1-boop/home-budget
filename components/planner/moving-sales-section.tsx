@@ -22,6 +22,7 @@ import {
   formatCurrency,
   formatDate,
   keepVisibleSelections,
+  parseMoneyInput,
   toggleAllVisibleSelections,
   toggleSelectionItem,
 } from "@/lib/planner-utils";
@@ -36,6 +37,7 @@ import {
   Field,
   FormDialog,
   LoadingState,
+  MoneyInput,
   RowActionMenu,
   SectionHeader,
   SegmentedControl,
@@ -69,6 +71,14 @@ type MultiSellRow = {
   platform: string;
 };
 
+type SellItemFormState = Omit<
+  SellItemFormValues,
+  "askingPrice" | "minimumPrice"
+> & {
+  askingPrice: string;
+  minimumPrice: string;
+};
+
 type MultiSellRowErrors = Partial<Record<MultiSellColumn, string>>;
 
 const multiSellColumns: MultiSellColumn[] = [
@@ -81,12 +91,12 @@ const multiSellColumns: MultiSellColumn[] = [
   "platform",
 ];
 
-function createEmptySellItemForm(): SellItemFormValues {
+function createEmptySellItemForm(): SellItemFormState {
   return {
     name: "",
     currentLocation: SELL_LOCATION_OPTIONS[0],
-    askingPrice: 0,
-    minimumPrice: 0,
+    askingPrice: "",
+    minimumPrice: "",
     sellByDate: "",
     status: "planned",
     platform: "",
@@ -231,7 +241,7 @@ export function MovingSalesSection() {
   const [sortBy, setSortBy] = useState<SellItemSortOption>("recent");
   const [selectedSellIds, setSelectedSellIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<SellItemStatus>("planned");
-  const [form, setForm] = useState<SellItemFormValues>(createEmptySellItemForm);
+  const [form, setForm] = useState<SellItemFormState>(createEmptySellItemForm);
   const [multiRows, setMultiRows] = useState<MultiSellRow[]>([createMultiSellRow()]);
   const [multiRowErrors, setMultiRowErrors] = useState<
     Record<string, MultiSellRowErrors>
@@ -285,7 +295,10 @@ export function MovingSalesSection() {
       .slice(0, 20);
   }, [data.sellItems]);
 
-  const visibleSellIds = filteredSellItems.map((item) => item.id);
+  const visibleSellIds = useMemo(
+    () => filteredSellItems.map((item) => item.id),
+    [filteredSellItems],
+  );
   const selectedVisibleCount = visibleSellIds.filter((id) =>
     selectedSellIds.includes(id),
   ).length;
@@ -299,7 +312,10 @@ export function MovingSalesSection() {
     setSelectedSellIds((current) => {
       const next = keepVisibleSelections(current, visibleSellIds);
 
-      if (JSON.stringify(current) === JSON.stringify(next)) {
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
         return current;
       }
 
@@ -447,8 +463,8 @@ export function MovingSalesSection() {
     setForm({
       name: item.name,
       currentLocation: item.currentLocation,
-      askingPrice: item.askingPrice,
-      minimumPrice: item.minimumPrice,
+      askingPrice: String(item.askingPrice),
+      minimumPrice: String(item.minimumPrice),
       sellByDate: item.sellByDate,
       status: item.status,
       platform: item.platform,
@@ -482,10 +498,16 @@ export function MovingSalesSection() {
       return;
     }
 
+    const nextInput: SellItemFormValues = {
+      ...form,
+      askingPrice: parseMoneyInput(form.askingPrice),
+      minimumPrice: parseMoneyInput(form.minimumPrice),
+    };
+
     if (editingItem) {
-      updateSellItem(editingItem.id, form);
+      updateSellItem(editingItem.id, nextInput);
     } else {
-      addSellItem(form);
+      addSellItem(nextInput);
     }
 
     handleCloseDialog();
@@ -635,7 +657,7 @@ export function MovingSalesSection() {
                             aria-label="현재 목록 전체 선택"
                             checked={isAllVisibleSelected}
                             indeterminate={isSomeVisibleSelected}
-                            onChange={toggleSelectAllSells}
+                            onChange={() => toggleSelectAllSells()}
                           />
                         </div>
                       </th>
@@ -938,23 +960,20 @@ export function MovingSalesSection() {
                                 </SelectInput>
                               </td>
                               <td className="table-col-right">
-                                <TextInput
+                                <MoneyInput
                                   ref={registerMultiCellRef(row.id, "askingPrice")}
                                   className={
                                     rowErrors?.askingPrice
                                       ? "entry-grid-control w-full border-[var(--danger)] text-right focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_12%,white)]"
                                       : "entry-grid-control w-full text-right"
                                   }
-                                  inputMode="numeric"
-                                  min="0"
                                   placeholder="0"
-                                  type="number"
                                   value={row.askingPrice}
-                                  onChange={(event) =>
+                                  onValueChange={(value) =>
                                     updateMultiRow(
                                       row.id,
                                       "askingPrice",
-                                      event.target.value,
+                                      value,
                                     )
                                   }
                                   onKeyDown={(event) =>
@@ -967,23 +986,20 @@ export function MovingSalesSection() {
                                 />
                               </td>
                               <td className="table-col-right">
-                                <TextInput
+                                <MoneyInput
                                   ref={registerMultiCellRef(row.id, "minimumPrice")}
                                   className={
                                     rowErrors?.minimumPrice
                                       ? "entry-grid-control w-full border-[var(--danger)] text-right focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_12%,white)]"
                                       : "entry-grid-control w-full text-right"
                                   }
-                                  inputMode="numeric"
-                                  min="0"
                                   placeholder="선택"
-                                  type="number"
                                   value={row.minimumPrice}
-                                  onChange={(event) =>
+                                  onValueChange={(value) =>
                                     updateMultiRow(
                                       row.id,
                                       "minimumPrice",
-                                      event.target.value,
+                                      value,
                                     )
                                   }
                                   onKeyDown={(event) =>
@@ -1122,34 +1138,26 @@ export function MovingSalesSection() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="희망 가격">
-                  <TextInput
+                  <MoneyInput
                     required
-                    inputMode="numeric"
-                    min="0"
-                    step="1000"
-                    type="number"
                     value={form.askingPrice}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        askingPrice: Number(event.target.value),
+                        askingPrice: value,
                       }))
                     }
                   />
                 </Field>
 
                 <Field label="최소 가격">
-                  <TextInput
+                  <MoneyInput
                     required
-                    inputMode="numeric"
-                    min="0"
-                    step="1000"
-                    type="number"
                     value={form.minimumPrice}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        minimumPrice: Number(event.target.value),
+                        minimumPrice: value,
                       }))
                     }
                   />

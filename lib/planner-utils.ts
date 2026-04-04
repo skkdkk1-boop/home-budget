@@ -1,5 +1,6 @@
 import type {
   Construction,
+  ConstructionStatus,
   DisposalItem,
   DashboardSummary,
   MoveItem,
@@ -8,9 +9,11 @@ import type {
   PurchaseCategory,
   PurchaseFormValues,
   Purchase,
+  PurchaseStatus,
   Room,
   SellItem,
   Shipping,
+  StatusTone,
 } from "@/lib/planner-types";
 import {
   PURCHASE_CATEGORY_OPTIONS,
@@ -29,8 +32,6 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 export const EMPTY_PLANNER_DATA: PlannerData = {
   funds: [],
   purchases: [],
-  shippings: [],
-  constructions: [],
   sellItems: [],
   disposalItems: [],
   moveItems: [],
@@ -54,6 +55,34 @@ export function cn(...classes: Array<string | false | null | undefined>) {
 
 export function formatCurrency(value: number) {
   return `${currencyFormatter.format(Math.round(value || 0))}원`;
+}
+
+export function sanitizeMoneyInput(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
+export function parseMoneyInput(value: string | number) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : 0;
+  }
+
+  const sanitized = sanitizeMoneyInput(value);
+
+  if (!sanitized) {
+    return 0;
+  }
+
+  return Number(sanitized);
+}
+
+export function formatMoneyInput(value: string | number) {
+  const parsed = parseMoneyInput(value);
+
+  if (parsed === 0) {
+    return typeof value === "string" && !sanitizeMoneyInput(value) ? "" : "0";
+  }
+
+  return currencyFormatter.format(parsed);
 }
 
 export function formatDate(value: string) {
@@ -297,9 +326,17 @@ export function parsePurchaseBulkInput(rawText: string) {
       quantity,
       paymentType: "lump",
       installmentMonths: 12,
-      scheduleDate: "",
       link: "",
       note: "",
+      deliveryRequired: false,
+      deliveryDate: "",
+      constructionRequired: false,
+      constructionDate: "",
+      constructionStartTime: "",
+      constructionCompany: "",
+      constructionTotalCost: 0,
+      constructionDeposit: 0,
+      constructionBalance: 0,
     });
   });
 
@@ -313,7 +350,7 @@ export function parsePurchaseBulkInput(rawText: string) {
 export function sortShippingsByUpcoming(items: Shipping[]) {
   return [...items].sort((a, b) => {
     return (
-      compareDateAsc(a.expectedDate, b.expectedDate) ||
+      compareDateAsc(a.deliveryDate, b.deliveryDate) ||
       compareRecent(a, b)
     );
   });
@@ -326,6 +363,103 @@ export function sortConstructionsByDate(items: Construction[]) {
       compareRecent(a, b)
     );
   });
+}
+
+export function isDeliveryPurchase(item: Purchase) {
+  return item.deliveryRequired;
+}
+
+export function getDeliveryScheduleMeta(deliveryDate: string): {
+  label: string;
+  tone: StatusTone;
+} {
+  const today = todayKey();
+
+  if (!deliveryDate) {
+    return {
+      label: "일정 미정",
+      tone: "neutral",
+    };
+  }
+
+  if (deliveryDate < today) {
+    return {
+      label: "지난 일정",
+      tone: "warning",
+    };
+  }
+
+  if (deliveryDate === today) {
+    return {
+      label: "오늘 배송",
+      tone: "info",
+    };
+  }
+
+  return {
+    label: "배송 예정",
+    tone: "success",
+  };
+}
+
+export function mapPurchaseToShipping(item: Purchase): Shipping {
+  return {
+    id: item.id,
+    itemName: item.name,
+    room: item.room,
+    deliveryDate: item.deliveryDate,
+    note: item.note,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+export function deriveShippingsFromPurchases(purchases: Purchase[]) {
+  return purchases.filter(isDeliveryPurchase).map(mapPurchaseToShipping);
+}
+
+export function isConstructionPurchase(item: Purchase) {
+  return item.constructionRequired;
+}
+
+export function mapConstructionStatusToPurchaseStatus(
+  status: ConstructionStatus,
+): PurchaseStatus {
+  return status === "done" ? "completed" : "planned";
+}
+
+export function mapPurchaseToConstruction(item: Purchase): Construction {
+  const derivedStatus: ConstructionStatus = item.constructionDate
+    ? "scheduled"
+    : "before";
+  const constructionStatus: ConstructionStatus =
+    item.status === "completed"
+      ? "done"
+      : item.constructionStatus && item.constructionStatus !== "done"
+        ? item.constructionStatus
+        : derivedStatus;
+
+  return {
+    id: item.id,
+    name: item.name,
+    room: item.room,
+    constructionStatus,
+    constructionDate: item.constructionDate,
+    constructionStartTime: item.constructionStartTime,
+    constructionCompany: item.constructionCompany,
+    constructionTotalCost: item.constructionTotalCost || item.totalPrice,
+    constructionDeposit: item.constructionDeposit,
+    constructionBalance:
+      item.constructionBalance ||
+      Math.max((item.constructionTotalCost || item.totalPrice) - item.constructionDeposit, 0),
+    note: item.note,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+export function deriveConstructionsFromPurchases(purchases: Purchase[]) {
+  return purchases.filter(isConstructionPurchase).map(mapPurchaseToConstruction);
 }
 
 export function buildDashboardSummary(data: PlannerData): DashboardSummary {
@@ -346,10 +480,12 @@ export function buildDashboardSummary(data: PlannerData): DashboardSummary {
   const remainingProjected =
     usableFunds - completedPurchaseTotal - plannedPurchaseTotal;
   const today = todayKey();
-  const upcomingShippings = sortShippingsByUpcoming(data.shippings)
-    .filter((item) => item.shippingStatus !== "delivered" && item.expectedDate >= today)
+  const derivedShippings = deriveShippingsFromPurchases(data.purchases);
+  const derivedConstructions = deriveConstructionsFromPurchases(data.purchases);
+  const upcomingShippings = sortShippingsByUpcoming(derivedShippings)
+    .filter((item) => item.deliveryDate >= today)
     .slice(0, 5);
-  const upcomingConstructions = sortConstructionsByDate(data.constructions)
+  const upcomingConstructions = sortConstructionsByDate(derivedConstructions)
     .filter((item) => item.constructionStatus !== "done" && item.constructionDate >= today)
     .slice(0, 5);
 
@@ -364,13 +500,12 @@ export function buildDashboardSummary(data: PlannerData): DashboardSummary {
     upcomingShippings:
       upcomingShippings.length > 0
         ? upcomingShippings
-        : sortShippingsByUpcoming(data.shippings)
-            .filter((item) => item.shippingStatus !== "delivered")
+        : sortShippingsByUpcoming(derivedShippings)
             .slice(0, 5),
     upcomingConstructions:
       upcomingConstructions.length > 0
         ? upcomingConstructions
-        : sortConstructionsByDate(data.constructions)
+        : sortConstructionsByDate(derivedConstructions)
             .filter((item) => item.constructionStatus !== "done")
             .slice(0, 5),
   };
@@ -378,31 +513,249 @@ export function buildDashboardSummary(data: PlannerData): DashboardSummary {
 
 export function parseStoredPlannerData(raw: string): PlannerData | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<PlannerData>;
+    const parsed = JSON.parse(raw) as Partial<PlannerData> & {
+      shippings?: Shipping[];
+      constructions?: Array<
+        Construction & {
+          cost?: number;
+          company?: string;
+          contact?: string;
+        }
+      >;
+    };
 
     if (
       !parsed ||
       !Array.isArray(parsed.funds) ||
-      !Array.isArray(parsed.purchases) ||
-      !Array.isArray(parsed.shippings) ||
-      !Array.isArray(parsed.constructions)
+      !Array.isArray(parsed.purchases)
     ) {
       return null;
     }
 
+    const purchases = parsed.purchases.map((item) => {
+      const purchase = item as Partial<Purchase> & { scheduleDate?: string };
+      const legacyScheduleDate =
+        typeof purchase.scheduleDate === "string" ? purchase.scheduleDate : "";
+      const constructionRequired =
+        typeof purchase.constructionRequired === "boolean"
+          ? purchase.constructionRequired
+          : Boolean(
+              purchase.category === "시공" ||
+                purchase.room === "시공" ||
+                purchase.constructionStatus ||
+                purchase.constructionCompany,
+            );
+      const deliveryRequired =
+        typeof purchase.deliveryRequired === "boolean"
+          ? purchase.deliveryRequired
+          : Boolean(!constructionRequired && legacyScheduleDate);
+      const constructionTotalCost = normalizeAmount(
+        Number(
+          purchase.constructionTotalCost ?? purchase.totalPrice ?? purchase.unitPrice ?? 0,
+        ),
+        0,
+      );
+      const constructionDeposit = normalizeAmount(
+        Number(purchase.constructionDeposit ?? 0),
+        0,
+      );
+
+      return withPurchaseAmounts({
+        id: purchase.id ?? createId("purchase"),
+        status: (purchase.status as PurchaseStatus) ?? "planned",
+        room: (purchase.room as Purchase["room"]) ?? ROOM_OPTIONS[0],
+        category: (purchase.category as PurchaseCategory) ?? "기타",
+        name: typeof purchase.name === "string" ? purchase.name : "",
+        unitPrice: normalizeAmount(Number(purchase.unitPrice ?? 0), 0),
+        quantity: normalizeAmount(Number(purchase.quantity ?? 1), 1),
+        totalPrice: normalizeAmount(Number(purchase.totalPrice ?? 0), 0),
+        paymentType: purchase.paymentType === "installment" ? "installment" : "lump",
+        installmentMonths: normalizeAmount(Number(purchase.installmentMonths ?? 0), 0),
+        monthlyPayment: normalizeAmount(Number(purchase.monthlyPayment ?? 0), 0),
+        link: typeof purchase.link === "string" ? purchase.link : "",
+        note: typeof purchase.note === "string" ? purchase.note : "",
+        deliveryRequired,
+        deliveryDate:
+          typeof purchase.deliveryDate === "string"
+            ? purchase.deliveryDate
+            : deliveryRequired
+              ? legacyScheduleDate
+              : "",
+        constructionRequired,
+        constructionStatus: purchase.constructionStatus,
+        constructionDate:
+          typeof purchase.constructionDate === "string"
+            ? purchase.constructionDate
+            : constructionRequired
+              ? legacyScheduleDate
+              : "",
+        constructionStartTime:
+          typeof purchase.constructionStartTime === "string"
+            ? purchase.constructionStartTime
+            : "",
+        constructionCompany:
+          typeof purchase.constructionCompany === "string"
+            ? purchase.constructionCompany
+            : "",
+        constructionTotalCost,
+        constructionDeposit,
+        constructionBalance: normalizeAmount(
+          Number(
+            purchase.constructionBalance ??
+              Math.max(constructionTotalCost - constructionDeposit, 0),
+          ),
+          0,
+        ),
+        createdAt:
+          typeof purchase.createdAt === "string"
+            ? purchase.createdAt
+            : new Date().toISOString(),
+        updatedAt:
+          typeof purchase.updatedAt === "string"
+            ? purchase.updatedAt
+            : new Date().toISOString(),
+      });
+    });
+    const shippingKeys = new Set(
+      purchases
+        .filter((item) => item.deliveryRequired)
+        .map((item) => `${item.name}::${item.deliveryDate}`),
+    );
+    const migratedShippingPurchases = Array.isArray(parsed.shippings)
+      ? parsed.shippings
+          .map(
+            (item) =>
+              item as Shipping & {
+                expectedDate?: string;
+              },
+          )
+          .filter((item) => {
+            const deliveryDate =
+              typeof item.deliveryDate === "string"
+                ? item.deliveryDate
+                : item.expectedDate ?? "";
+            const key = `${item.itemName}::${deliveryDate}`;
+
+            if (shippingKeys.has(key)) {
+              return false;
+            }
+
+            shippingKeys.add(key);
+            return true;
+          })
+          .map((item) =>
+            withPurchaseAmounts({
+              id: `purchase-shipping-${item.id}`,
+              status: "planned",
+              room: item.room,
+              category: "기타",
+              name: item.itemName,
+              unitPrice: 0,
+              quantity: 1,
+              totalPrice: 0,
+              paymentType: "lump",
+              installmentMonths: 0,
+              monthlyPayment: 0,
+              link: "",
+              note: item.note,
+              deliveryRequired: true,
+              deliveryDate:
+                typeof item.deliveryDate === "string"
+                  ? item.deliveryDate
+                  : item.expectedDate ?? "",
+              constructionRequired: false,
+              constructionStatus: undefined,
+              constructionDate: "",
+              constructionStartTime: "",
+              constructionCompany: "",
+              constructionTotalCost: 0,
+              constructionDeposit: 0,
+              constructionBalance: 0,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+            }),
+          )
+      : [];
+    const constructionKeys = new Set(
+      purchases
+        .filter(isConstructionPurchase)
+        .map((item) => `${item.name}::${item.constructionDate}::${item.constructionTotalCost}`),
+    );
+    const migratedConstructionPurchases = Array.isArray(parsed.constructions)
+      ? parsed.constructions
+          .map(
+            (item) =>
+              item as Construction & {
+                cost?: number;
+                company?: string;
+                contact?: string;
+              },
+          )
+          .filter((item) => {
+            const totalCost = normalizeAmount(
+              Number(item.constructionTotalCost ?? item.cost ?? 0),
+              0,
+            );
+            const key = `${item.name}::${item.constructionDate}::${totalCost}`;
+
+            if (constructionKeys.has(key)) {
+              return false;
+            }
+
+            constructionKeys.add(key);
+            return true;
+          })
+          .map((item) => {
+            const totalCost = normalizeAmount(
+              Number(item.constructionTotalCost ?? item.cost ?? 0),
+              0,
+            );
+            const deposit = normalizeAmount(Number(item.constructionDeposit ?? 0), 0);
+            const calculated = calculatePurchaseAmounts({
+              unitPrice: totalCost,
+              quantity: 1,
+              paymentType: "lump",
+              installmentMonths: 0,
+            });
+
+            return withPurchaseAmounts({
+              id: `purchase-migrated-${item.id}`,
+              status: mapConstructionStatusToPurchaseStatus(item.constructionStatus),
+              room: item.room,
+              category: "시공",
+              name: item.name,
+              unitPrice: totalCost,
+              quantity: 1,
+              totalPrice: calculated.totalPrice,
+              paymentType: "lump",
+              installmentMonths: calculated.installmentMonths,
+              monthlyPayment: calculated.monthlyPayment,
+              link: "",
+              note: item.note,
+              deliveryRequired: false,
+              deliveryDate: "",
+              constructionRequired: true,
+              constructionStatus: item.constructionStatus,
+              constructionDate: item.constructionDate,
+              constructionStartTime: item.constructionStartTime ?? "",
+              constructionCompany: item.constructionCompany ?? item.company ?? "",
+              constructionTotalCost: totalCost,
+              constructionDeposit: deposit,
+              constructionBalance: normalizeAmount(
+                Number(
+                  item.constructionBalance ?? Math.max(totalCost - deposit, 0),
+                ),
+                0,
+              ),
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+            });
+          })
+      : [];
+
     return {
       funds: parsed.funds,
-      purchases: parsed.purchases.map((item) => {
-        const purchase = item as Purchase & { scheduleDate?: string };
-
-        return withPurchaseAmounts({
-          ...purchase,
-          scheduleDate:
-            typeof purchase.scheduleDate === "string" ? purchase.scheduleDate : "",
-        });
-      }),
-      shippings: parsed.shippings,
-      constructions: parsed.constructions,
+      purchases: [...purchases, ...migratedShippingPurchases, ...migratedConstructionPurchases],
       sellItems: Array.isArray(parsed.sellItems)
         ? parsed.sellItems.map((item) => item as SellItem)
         : [],

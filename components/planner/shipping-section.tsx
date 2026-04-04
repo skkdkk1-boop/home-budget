@@ -3,15 +3,16 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Room, Shipping, ShippingFormValues } from "@/lib/planner-types";
-import {
-  ROOM_OPTIONS,
-  SHIPPING_STATUS_LABELS,
-  SHIPPING_STATUS_OPTIONS,
-  SHIPPING_STATUS_TONES,
+import type {
+  Purchase,
+  PurchaseFormValues,
+  Shipping,
 } from "@/lib/planner-types";
+import { ROOM_OPTIONS } from "@/lib/planner-types";
 import {
+  deriveShippingsFromPurchases,
   formatDate,
+  getDeliveryScheduleMeta,
   keepVisibleSelections,
   sortShippingsByUpcoming,
   toggleAllVisibleSelections,
@@ -41,12 +42,18 @@ import {
   TextInput,
 } from "./ui";
 
-function createEmptyShippingForm(): ShippingFormValues {
+type ShippingFormState = {
+  itemName: string;
+  room: PurchaseFormValues["room"];
+  deliveryDate: string;
+  note: string;
+};
+
+function createEmptyShippingForm(): ShippingFormState {
   return {
     itemName: "",
     room: ROOM_OPTIONS[0],
-    shippingStatus: SHIPPING_STATUS_OPTIONS[0],
-    expectedDate: todayKey(),
+    deliveryDate: todayKey(),
     note: "",
   };
 }
@@ -55,14 +62,12 @@ export function ShippingSection() {
   const {
     data,
     isReady,
-    addShipping,
-    updateShipping,
-    deleteShipping,
-    deleteShippings,
+    addPurchase,
+    updatePurchase,
   } = usePlannerData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingShipping, setEditingShipping] = useState<Shipping | null>(null);
-  const [form, setForm] = useState<ShippingFormValues>(createEmptyShippingForm);
+  const [form, setForm] = useState<ShippingFormState>(createEmptyShippingForm);
   const [selectedShippingIds, setSelectedShippingIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -76,8 +81,7 @@ export function ShippingSection() {
       setForm({
         itemName: editingShipping.itemName,
         room: editingShipping.room,
-        shippingStatus: editingShipping.shippingStatus,
-        expectedDate: editingShipping.expectedDate,
+        deliveryDate: editingShipping.deliveryDate,
         note: editingShipping.note,
       });
       return;
@@ -87,10 +91,13 @@ export function ShippingSection() {
   }, [editingShipping, isDialogOpen]);
 
   const sortedShippings = useMemo(
-    () => sortShippingsByUpcoming(data.shippings),
-    [data.shippings],
+    () => sortShippingsByUpcoming(deriveShippingsFromPurchases(data.purchases)),
+    [data.purchases],
   );
-  const visibleShippingIds = sortedShippings.map((item) => item.id);
+  const visibleShippingIds = useMemo(
+    () => sortedShippings.map((item) => item.id),
+    [sortedShippings],
+  );
   const selectedVisibleCount = visibleShippingIds.filter((id) =>
     selectedShippingIds.includes(id),
   ).length;
@@ -100,15 +107,43 @@ export function ShippingSection() {
   const isSomeVisibleSelected =
     selectedVisibleCount > 0 && !isAllVisibleSelected;
   const today = todayKey();
-  const upcomingCount = data.shippings.filter(
-    (item) => item.shippingStatus !== "delivered" && item.expectedDate >= today,
+  const upcomingCount = sortedShippings.filter(
+    (item) => item.deliveryDate > today,
   ).length;
-  const inTransitCount = data.shippings.filter(
-    (item) => item.shippingStatus === "shipping",
+  const todayCount = sortedShippings.filter(
+    (item) => item.deliveryDate === today,
   ).length;
-  const deliveredCount = data.shippings.filter(
-    (item) => item.shippingStatus === "delivered",
+  const overdueCount = sortedShippings.filter(
+    (item) => item.deliveryDate < today,
   ).length;
+  const buildPurchaseInput = (
+    basePurchase: Purchase | null,
+    overrides: Partial<ShippingFormState & { deliveryRequired: boolean }>,
+  ): PurchaseFormValues => ({
+    status: basePurchase?.status ?? "planned",
+    room: overrides.room ?? basePurchase?.room ?? ROOM_OPTIONS[0],
+    category: basePurchase?.category ?? "기타",
+    name: overrides.itemName ?? basePurchase?.name ?? "",
+    unitPrice: basePurchase?.unitPrice ?? 0,
+    quantity: basePurchase?.quantity ?? 1,
+    paymentType: basePurchase?.paymentType ?? "lump",
+    installmentMonths:
+      basePurchase?.paymentType === "installment"
+        ? basePurchase.installmentMonths
+        : 12,
+    link: basePurchase?.link ?? "",
+    note: overrides.note ?? basePurchase?.note ?? "",
+    deliveryRequired: overrides.deliveryRequired ?? basePurchase?.deliveryRequired ?? true,
+    deliveryDate: overrides.deliveryDate ?? basePurchase?.deliveryDate ?? todayKey(),
+    constructionRequired: basePurchase?.constructionRequired ?? false,
+    constructionStatus: basePurchase?.constructionStatus,
+    constructionDate: basePurchase?.constructionDate ?? "",
+    constructionStartTime: basePurchase?.constructionStartTime ?? "",
+    constructionCompany: basePurchase?.constructionCompany ?? "",
+    constructionTotalCost: basePurchase?.constructionTotalCost ?? 0,
+    constructionDeposit: basePurchase?.constructionDeposit ?? 0,
+    constructionBalance: basePurchase?.constructionBalance ?? 0,
+  });
 
   const startCreate = () => {
     setEditingShipping(null);
@@ -123,10 +158,31 @@ export function ShippingSection() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const existingPurchase = editingShipping
+      ? data.purchases.find((item) => item.id === editingShipping.id) ?? null
+      : null;
+
     if (editingShipping) {
-      updateShipping(editingShipping.id, form);
+      updatePurchase(
+        editingShipping.id,
+        buildPurchaseInput(existingPurchase, {
+          itemName: form.itemName,
+          room: form.room,
+          note: form.note,
+          deliveryRequired: true,
+          deliveryDate: form.deliveryDate,
+        }),
+      );
     } else {
-      addShipping(form);
+      addPurchase(
+        buildPurchaseInput(null, {
+          itemName: form.itemName,
+          room: form.room,
+          note: form.note,
+          deliveryRequired: true,
+          deliveryDate: form.deliveryDate,
+        }),
+      );
     }
 
     setIsDialogOpen(false);
@@ -134,18 +190,37 @@ export function ShippingSection() {
 
   const requestDelete = (shipping: Shipping) => {
     if (window.confirm(`"${shipping.itemName}" 배송 항목을 삭제할까요?`)) {
-      deleteShipping(shipping.id);
+      const existingPurchase =
+        data.purchases.find((item) => item.id === shipping.id) ?? null;
+
+      if (!existingPurchase) {
+        return;
+      }
+
+      updatePurchase(
+        shipping.id,
+        buildPurchaseInput(existingPurchase, {
+          deliveryRequired: false,
+          deliveryDate: "",
+        }),
+      );
     }
   };
 
   useEffect(() => {
-    setSelectedShippingIds((current) =>
-      keepVisibleSelections(
-        current,
-        sortedShippings.map((item) => item.id),
-      ),
-    );
-  }, [sortedShippings]);
+    setSelectedShippingIds((current) => {
+      const next = keepVisibleSelections(current, visibleShippingIds);
+
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [visibleShippingIds]);
 
   const toggleShippingSelection = (shippingId: string) => {
     setSelectedShippingIds((current) =>
@@ -177,7 +252,21 @@ export function ShippingSection() {
         `선택한 ${selectedShippingIds.length}개 항목을 삭제할까요?`,
       )
     ) {
-      deleteShippings(selectedShippingIds);
+      selectedShippingIds.forEach((id) => {
+        const existingPurchase = data.purchases.find((item) => item.id === id) ?? null;
+
+        if (!existingPurchase) {
+          return;
+        }
+
+        updatePurchase(
+          id,
+          buildPurchaseInput(existingPurchase, {
+            deliveryRequired: false,
+            deliveryDate: "",
+          }),
+        );
+      });
       clearShippingSelection();
     }
   };
@@ -195,7 +284,7 @@ export function ShippingSection() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           label="전체 배송 항목"
-          value={`${data.shippings.length}개`}
+          value={`${sortedShippings.length}개`}
         />
         <SummaryCard
           label="다가오는 일정"
@@ -203,12 +292,12 @@ export function ShippingSection() {
           tone="highlight"
         />
         <SummaryCard
-          label="배송 중"
-          value={`${inTransitCount}건`}
+          label="오늘 배송"
+          value={`${todayCount}건`}
         />
         <SummaryCard
-          label="배송 완료"
-          value={`${deliveredCount}건`}
+          label="지난 일정"
+          value={`${overdueCount}건`}
         />
       </div>
 
@@ -232,7 +321,7 @@ export function ShippingSection() {
           {sortedShippings.length === 0 ? (
             <EmptyState
               title="등록된 배송이 없어요"
-              description="구매 후 예상 배송일을 기록해두면 대시보드와 자동 연결됩니다."
+              description="배송이 필요한 품목에 날짜만 입력해두면 배송 관리와 대시보드에 바로 반영됩니다."
             />
           ) : (
             <>
@@ -247,14 +336,14 @@ export function ShippingSection() {
                               aria-label="현재 목록 전체 선택"
                               checked={isAllVisibleSelected}
                               indeterminate={isSomeVisibleSelected}
-                              onChange={toggleSelectAllShippings}
+                              onChange={() => toggleSelectAllShippings()}
                             />
                           </div>
                         </th>
                         <th className="table-col-status">상태</th>
                         <th className="table-col-left">품목</th>
                         <th className="table-col-left">공간</th>
-                        <th className="table-col-date">예정일</th>
+                        <th className="table-col-date">배송일</th>
                         <th className="table-col-left">메모</th>
                         <th className="table-col-actions">
                           <span className="sr-only">행 동작</span>
@@ -262,113 +351,121 @@ export function ShippingSection() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedShippings.map((shipping) => (
-                        <tr key={shipping.id}>
-                          <td className="table-col-select">
-                            <div className="table-action-slot">
-                              <SelectionCheckbox
-                                aria-label={`${shipping.itemName} 선택`}
-                                checked={selectedShippingIds.includes(shipping.id)}
-                                onChange={() => toggleShippingSelection(shipping.id)}
-                              />
-                            </div>
-                          </td>
-                          <td className="table-col-status">
-                            <StatusBadge tone={SHIPPING_STATUS_TONES[shipping.shippingStatus]}>
-                              {SHIPPING_STATUS_LABELS[shipping.shippingStatus]}
-                            </StatusBadge>
-                          </td>
-                          <td className="table-col-left">
-                            <p className="table-cell-title">{shipping.itemName}</p>
-                          </td>
-                          <td className="table-col-left text-[var(--text-secondary)]">
-                            {shipping.room}
-                          </td>
-                          <td className="table-col-date text-[var(--text-primary)]">
-                            {formatDate(shipping.expectedDate)}
-                          </td>
-                          <td className="table-col-left text-[var(--text-secondary)]">
-                            {shipping.note ? (
-                              <p className="table-cell-note max-w-[20rem]">
-                                {shipping.note}
-                              </p>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                          <td className="table-col-actions">
-                            <div className="table-action-slot">
-                              <RowActionMenu
-                                description={`${shipping.room} · ${formatDate(shipping.expectedDate)}`}
-                                label={shipping.itemName}
-                                mode="desktop"
-                                onDelete={() => requestDelete(shipping)}
-                                onEdit={() => startEdit(shipping)}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {sortedShippings.map((shipping) => {
+                        const deliveryMeta = getDeliveryScheduleMeta(shipping.deliveryDate);
+
+                        return (
+                          <tr key={shipping.id}>
+                            <td className="table-col-select">
+                              <div className="table-action-slot">
+                                <SelectionCheckbox
+                                  aria-label={`${shipping.itemName} 선택`}
+                                  checked={selectedShippingIds.includes(shipping.id)}
+                                  onChange={() => toggleShippingSelection(shipping.id)}
+                                />
+                              </div>
+                            </td>
+                            <td className="table-col-status">
+                              <StatusBadge tone={deliveryMeta.tone}>
+                                {deliveryMeta.label}
+                              </StatusBadge>
+                            </td>
+                            <td className="table-col-left">
+                              <p className="table-cell-title">{shipping.itemName}</p>
+                            </td>
+                            <td className="table-col-left text-[var(--text-secondary)]">
+                              {shipping.room}
+                            </td>
+                            <td className="table-col-date text-[var(--text-primary)]">
+                              {formatDate(shipping.deliveryDate)}
+                            </td>
+                            <td className="table-col-left text-[var(--text-secondary)]">
+                              {shipping.note ? (
+                                <p className="table-cell-note max-w-[20rem]">
+                                  {shipping.note}
+                                </p>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                            <td className="table-col-actions">
+                              <div className="table-action-slot">
+                                <RowActionMenu
+                                  description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
+                                  label={shipping.itemName}
+                                  mode="desktop"
+                                  onDelete={() => requestDelete(shipping)}
+                                  onEdit={() => startEdit(shipping)}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </TableContainer>
               </div>
 
               <div className="grid gap-3 lg:hidden">
-                {sortedShippings.map((shipping) => (
-                  <article
-                    key={shipping.id}
-                    className="planner-mobile-card relative p-4 sm:p-5"
-                  >
-                    <div className="absolute left-4 top-4 z-10">
-                      <SelectionCheckbox
-                        aria-label={`${shipping.itemName} 선택`}
-                        checked={selectedShippingIds.includes(shipping.id)}
-                        onChange={() => toggleShippingSelection(shipping.id)}
-                      />
-                    </div>
+                {sortedShippings.map((shipping) => {
+                  const deliveryMeta = getDeliveryScheduleMeta(shipping.deliveryDate);
 
-                    <div className="pl-8 pr-12">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge tone={SHIPPING_STATUS_TONES[shipping.shippingStatus]}>
-                              {SHIPPING_STATUS_LABELS[shipping.shippingStatus]}
-                            </StatusBadge>
-                            <p className="table-cell-title text-base">
-                              {shipping.itemName}
-                            </p>
-                          </div>
-                          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                            {shipping.room}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-[var(--text-primary)]">
-                            {formatDate(shipping.expectedDate)}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--text-muted)]">예정일</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-3">
-                        <DetailRow
-                          label="메모"
-                          value={shipping.note || "-"}
+                  return (
+                    <article
+                      key={shipping.id}
+                      className="planner-mobile-card relative p-4 sm:p-5"
+                    >
+                      <div className="absolute left-4 top-4 z-10">
+                        <SelectionCheckbox
+                          aria-label={`${shipping.itemName} 선택`}
+                          checked={selectedShippingIds.includes(shipping.id)}
+                          onChange={() => toggleShippingSelection(shipping.id)}
                         />
                       </div>
-                    </div>
 
-                    <RowActionMenu
-                      description={`${shipping.room} · ${formatDate(shipping.expectedDate)}`}
-                      label={shipping.itemName}
-                      mode="mobile"
-                      onDelete={() => requestDelete(shipping)}
-                      onEdit={() => startEdit(shipping)}
-                      triggerClassName="absolute right-4 top-4"
-                    />
-                  </article>
-                ))}
+                      <div className="pl-8 pr-12">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <StatusBadge tone={deliveryMeta.tone}>
+                                {deliveryMeta.label}
+                              </StatusBadge>
+                              <p className="table-cell-title text-base">
+                                {shipping.itemName}
+                              </p>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                              {shipping.room}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">
+                              {formatDate(shipping.deliveryDate)}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">배송일</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                          <DetailRow
+                            label="메모"
+                            value={shipping.note || "-"}
+                          />
+                        </div>
+                      </div>
+
+                      <RowActionMenu
+                        description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
+                        label={shipping.itemName}
+                        mode="mobile"
+                        onDelete={() => requestDelete(shipping)}
+                        onEdit={() => startEdit(shipping)}
+                        triggerClassName="absolute right-4 top-4"
+                      />
+                    </article>
+                  );
+                })}
               </div>
             </>
           )}
@@ -378,7 +475,7 @@ export function ShippingSection() {
       <FormDialog
         open={isDialogOpen}
         title={editingShipping ? "배송 항목 수정" : "배송 항목 추가"}
-        description="주문 단계와 예정일을 입력하면 대시보드 일정에도 자동 반영됩니다."
+        description="배송이 필요한 품목만 날짜를 남기면 다른 배송 정보 없이도 일정 관리에 바로 쓸 수 있어요."
         onClose={() => setIsDialogOpen(false)}
       >
         <form className="grid gap-4" onSubmit={handleSubmit}>
@@ -396,14 +493,14 @@ export function ShippingSection() {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="공간">
               <SelectInput
                 value={form.room}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    room: event.target.value as Room,
+                    room: event.target.value as PurchaseFormValues["room"],
                   }))
                 }
               >
@@ -415,33 +512,15 @@ export function ShippingSection() {
               </SelectInput>
             </Field>
 
-            <Field label="배송 상태">
-              <SelectInput
-                value={form.shippingStatus}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    shippingStatus: event.target.value as ShippingFormValues["shippingStatus"],
-                  }))
-                }
-              >
-                {SHIPPING_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {SHIPPING_STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-
-            <Field label="예상 배송일">
+            <Field label="배송일">
               <TextInput
                 required
                 type="date"
-                value={form.expectedDate}
+                value={form.deliveryDate}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    expectedDate: event.target.value,
+                    deliveryDate: event.target.value,
                   }))
                 }
               />

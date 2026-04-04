@@ -12,16 +12,21 @@ import {
 } from "react";
 
 import type {
+  ConstructionStatus,
   Purchase,
   PurchaseCategory,
   PurchaseFormValues,
+  PurchaseRoom,
   PurchaseSortOption,
   PurchaseStatus,
   Room,
 } from "@/lib/planner-types";
 import {
+  CONSTRUCTION_STATUS_LABELS,
+  CONSTRUCTION_STATUS_OPTIONS,
   PAYMENT_TYPE_LABELS,
   PURCHASE_CATEGORY_OPTIONS,
+  PURCHASE_MULTI_ROOM_OPTIONS,
   PURCHASE_STATUS_LABELS,
   PURCHASE_STATUS_OPTIONS,
   PURCHASE_STATUS_TONES,
@@ -33,6 +38,7 @@ import {
   formatCurrency,
   formatDate,
   keepVisibleSelections,
+  parseMoneyInput,
   parsePurchaseBulkInput,
   toggleAllVisibleSelections,
   toggleSelectionItem,
@@ -48,6 +54,7 @@ import {
   Field,
   FormDialog,
   LoadingState,
+  MoneyInput,
   RowActionMenu,
   SegmentedControl,
   SegmentedControlButton,
@@ -69,12 +76,22 @@ type MultiPurchaseColumn = "name" | "room" | "category" | "unitPrice" | "quantit
 type MultiPurchaseRow = {
   id: string;
   name: string;
-  room: Room | "";
+  room: PurchaseRoom | "";
   category: PurchaseCategory | "";
   unitPrice: string;
   quantity: string;
 };
 type MultiPurchaseRowErrors = Partial<Record<MultiPurchaseColumn, string>>;
+
+type PurchaseFormState = Omit<
+  PurchaseFormValues,
+  "unitPrice" | "constructionTotalCost" | "constructionDeposit" | "constructionBalance"
+> & {
+  unitPrice: string;
+  constructionTotalCost: string;
+  constructionDeposit: string;
+  constructionBalance: string;
+};
 
 const multiPurchaseColumns: MultiPurchaseColumn[] = [
   "name",
@@ -83,6 +100,7 @@ const multiPurchaseColumns: MultiPurchaseColumn[] = [
   "unitPrice",
   "quantity",
 ];
+const multiPurchaseRoomOptions = PURCHASE_MULTI_ROOM_OPTIONS;
 
 function createMultiPurchaseRow(): MultiPurchaseRow {
   return {
@@ -135,7 +153,10 @@ function validateMultiPurchaseRows(rows: MultiPurchaseRow[]) {
       errors.name = "품목명을 입력해주세요.";
     }
 
-    if (!row.room || !ROOM_OPTIONS.includes(row.room as Room)) {
+    if (
+      !row.room ||
+      !multiPurchaseRoomOptions.includes(row.room as PurchaseRoom)
+    ) {
       errors.room = "공간을 선택해주세요.";
     }
 
@@ -173,16 +194,25 @@ function validateMultiPurchaseRows(rows: MultiPurchaseRow[]) {
 
     items.push({
       status: "planned",
-      room: row.room as Room,
+      room: row.room as PurchaseRoom,
       category: row.category as PurchaseCategory,
       name: row.name.trim(),
       unitPrice,
       quantity,
       paymentType: "lump",
       installmentMonths: 12,
-      scheduleDate: "",
       link: "",
       note: "",
+      deliveryRequired: false,
+      deliveryDate: "",
+      constructionRequired: false,
+      constructionStatus: undefined,
+      constructionDate: "",
+      constructionStartTime: "",
+      constructionCompany: "",
+      constructionTotalCost: 0,
+      constructionDeposit: 0,
+      constructionBalance: 0,
     });
   });
 
@@ -194,20 +224,56 @@ function validateMultiPurchaseRows(rows: MultiPurchaseRow[]) {
   };
 }
 
-function createEmptyPurchaseForm(): PurchaseFormValues {
+function createEmptyPurchaseForm(): PurchaseFormState {
   return {
     status: "planned",
     room: ROOM_OPTIONS[0],
     category: "기타",
     name: "",
-    unitPrice: 0,
+    unitPrice: "",
     quantity: 1,
     paymentType: "lump",
     installmentMonths: 12,
-    scheduleDate: "",
     link: "",
     note: "",
+    deliveryRequired: false,
+    deliveryDate: "",
+    constructionRequired: false,
+    constructionStatus: CONSTRUCTION_STATUS_OPTIONS[0],
+    constructionDate: "",
+    constructionStartTime: "",
+    constructionCompany: "",
+    constructionTotalCost: "",
+    constructionDeposit: "",
+    constructionBalance: "",
   };
+}
+
+function getPurchaseTimelineText(
+  purchase: Pick<
+    PurchaseFormValues,
+    | "deliveryRequired"
+    | "deliveryDate"
+    | "constructionRequired"
+    | "constructionDate"
+    | "constructionStartTime"
+  >,
+) {
+  const segments: string[] = [];
+
+  if (purchase.deliveryRequired && purchase.deliveryDate) {
+    segments.push(`배송 ${formatDate(purchase.deliveryDate)}`);
+  }
+
+  if (purchase.constructionRequired && purchase.constructionDate) {
+    segments.push(
+      `시공 ${formatDate(purchase.constructionDate)}${
+        purchase.constructionStartTime ? ` ${purchase.constructionStartTime}` : ""
+      }`,
+    );
+  }
+
+  return segments.length > 0 ? segments.join(" · ") : null;
 }
 
 export function PurchasesSection() {
@@ -226,7 +292,7 @@ export function PurchasesSection() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [inputMode, setInputMode] = useState<PurchaseInputMode>("single");
   const [multiEntryMode, setMultiEntryMode] = useState<MultiEntryMode>("table");
-  const [form, setForm] = useState<PurchaseFormValues>(createEmptyPurchaseForm);
+  const [form, setForm] = useState<PurchaseFormState>(createEmptyPurchaseForm);
   const [multiRows, setMultiRows] = useState<MultiPurchaseRow[]>([
     createMultiPurchaseRow(),
   ]);
@@ -285,16 +351,32 @@ export function PurchasesSection() {
         room: editingPurchase.room,
         category: editingPurchase.category,
         name: editingPurchase.name,
-        unitPrice: editingPurchase.unitPrice,
+        unitPrice: String(editingPurchase.unitPrice),
         quantity: editingPurchase.quantity,
         paymentType: editingPurchase.paymentType,
         installmentMonths:
           editingPurchase.installmentMonths > 0
             ? editingPurchase.installmentMonths
             : 12,
-        scheduleDate: editingPurchase.scheduleDate,
         link: editingPurchase.link,
         note: editingPurchase.note,
+        deliveryRequired: editingPurchase.deliveryRequired,
+        deliveryDate: editingPurchase.deliveryDate,
+        constructionRequired: editingPurchase.constructionRequired,
+        constructionStatus:
+          editingPurchase.constructionStatus ?? CONSTRUCTION_STATUS_OPTIONS[0],
+        constructionDate: editingPurchase.constructionDate,
+        constructionStartTime: editingPurchase.constructionStartTime,
+        constructionCompany: editingPurchase.constructionCompany,
+        constructionTotalCost: editingPurchase.constructionTotalCost
+          ? String(editingPurchase.constructionTotalCost)
+          : "",
+        constructionDeposit: editingPurchase.constructionDeposit
+          ? String(editingPurchase.constructionDeposit)
+          : "",
+        constructionBalance: editingPurchase.constructionBalance
+          ? String(editingPurchase.constructionBalance)
+          : "",
       });
       return;
     }
@@ -341,12 +423,21 @@ export function PurchasesSection() {
   }, [categoryFilter, data.purchases, deferredSearchTerm, roomFilter, sortBy, statusFilter]);
 
   useEffect(() => {
-    setSelectedPurchaseIds((current) =>
-      keepVisibleSelections(
+    setSelectedPurchaseIds((current) => {
+      const next = keepVisibleSelections(
         current,
         filteredPurchases.map((item) => item.id),
-      ),
-    );
+      );
+
+      if (
+        current.length === next.length &&
+        current.every((id, index) => id === next[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
   }, [filteredPurchases]);
 
   useEffect(() => {
@@ -374,7 +465,13 @@ export function PurchasesSection() {
     });
   }, [inputMode, isDialogOpen, multiEntryMode, multiRows]);
 
-  const draftAmounts = calculatePurchaseAmounts(form);
+  const draftAmounts = calculatePurchaseAmounts({
+    ...form,
+    unitPrice: parseMoneyInput(form.unitPrice),
+  });
+  const draftConstructionTotalCost = parseMoneyInput(form.constructionTotalCost);
+  const draftConstructionDeposit = parseMoneyInput(form.constructionDeposit);
+  const draftConstructionBalance = parseMoneyInput(form.constructionBalance);
   const isInstallment = form.paymentType === "installment";
   const visiblePurchaseIds = filteredPurchases.map((item) => item.id);
   const selectedVisibleCount = visiblePurchaseIds.filter((id) =>
@@ -385,10 +482,6 @@ export function PurchasesSection() {
     visiblePurchaseIds.every((id) => selectedPurchaseIds.includes(id));
   const isSomeVisibleSelected =
     selectedVisibleCount > 0 && !isAllVisibleSelected;
-  const filteredTotal = filteredPurchases.reduce(
-    (sum, item) => sum + item.totalPrice,
-    0,
-  );
   const committedCount = data.purchases.filter(
     (item) => item.status !== "planned",
   ).length;
@@ -400,6 +493,14 @@ export function PurchasesSection() {
       .filter(Boolean)
       .slice(0, 24);
   }, [data.purchases]);
+  const detailRoomOptions = useMemo(() => {
+    if (ROOM_OPTIONS.includes(form.room as Room)) {
+      return ROOM_OPTIONS;
+    }
+
+    return [...ROOM_OPTIONS, form.room] as const;
+  }, [form.room]);
+  const purchaseTimelineText = getPurchaseTimelineText(form);
 
   const registerMultiCellRef =
     (rowId: string, column: MultiPurchaseColumn) =>
@@ -547,10 +648,18 @@ export function PurchasesSection() {
       return;
     }
 
+    const nextInput: PurchaseFormValues = {
+      ...form,
+      unitPrice: parseMoneyInput(form.unitPrice),
+      constructionTotalCost: parseMoneyInput(form.constructionTotalCost),
+      constructionDeposit: parseMoneyInput(form.constructionDeposit),
+      constructionBalance: parseMoneyInput(form.constructionBalance),
+    };
+
     if (editingPurchase) {
-      updatePurchase(editingPurchase.id, form);
+      updatePurchase(editingPurchase.id, nextInput);
     } else {
-      addPurchase(form);
+      addPurchase(nextInput);
     }
 
     setIsDialogOpen(false);
@@ -780,7 +889,7 @@ export function PurchasesSection() {
                               aria-label="현재 목록 전체 선택"
                               checked={isAllVisibleSelected}
                               indeterminate={isSomeVisibleSelected}
-                              onChange={toggleSelectAllPurchases}
+                              onChange={() => toggleSelectAllPurchases()}
                             />
                           </div>
                         </th>
@@ -826,9 +935,9 @@ export function PurchasesSection() {
                               <p className="table-cell-meta">
                                 {purchase.room} · {purchase.category}
                               </p>
-                              {purchase.scheduleDate ? (
+                              {getPurchaseTimelineText(purchase) ? (
                                 <p className="table-cell-note">
-                                  일정 {formatDate(purchase.scheduleDate)}
+                                  {getPurchaseTimelineText(purchase)}
                                 </p>
                               ) : null}
                             </div>
@@ -921,9 +1030,9 @@ export function PurchasesSection() {
                           <p className="mt-2 text-sm text-[var(--text-secondary)]">
                             {purchase.room} · {purchase.category}
                           </p>
-                          {purchase.scheduleDate ? (
+                          {getPurchaseTimelineText(purchase) ? (
                             <p className="mt-1 text-xs text-[var(--text-muted)]">
-                              일정 {formatDate(purchase.scheduleDate)}
+                              {getPurchaseTimelineText(purchase)}
                             </p>
                           ) : null}
                         </div>
@@ -961,9 +1070,7 @@ export function PurchasesSection() {
                         <DetailRow
                           label="일정"
                           value={
-                            purchase.scheduleDate
-                              ? formatDate(purchase.scheduleDate)
-                              : "-"
+                            getPurchaseTimelineText(purchase) ?? "-"
                           }
                         />
                         <DetailRow
@@ -1154,7 +1261,7 @@ export function PurchasesSection() {
                                       }
                                     >
                                       <option value="">선택</option>
-                                      {ROOM_OPTIONS.map((room) => (
+                                      {multiPurchaseRoomOptions.map((room) => (
                                         <option key={room} value={room}>
                                           {room}
                                         </option>
@@ -1190,23 +1297,20 @@ export function PurchasesSection() {
                                     </SelectInput>
                                   </td>
                                   <td className="table-col-right">
-                                    <TextInput
+                                    <MoneyInput
                                       ref={registerMultiCellRef(row.id, "unitPrice")}
                                       className={
                                         rowErrors?.unitPrice
                                           ? "entry-grid-control w-full border-[var(--danger)] text-right focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_12%,white)]"
                                           : "entry-grid-control w-full text-right"
                                       }
-                                      inputMode="numeric"
-                                      min="0"
                                       placeholder="0"
-                                      type="number"
                                       value={row.unitPrice}
-                                      onChange={(event) =>
+                                      onValueChange={(value) =>
                                         updateMultiRow(
                                           row.id,
                                           "unitPrice",
-                                          event.target.value,
+                                          value,
                                         )
                                       }
                                       onKeyDown={(event) =>
@@ -1344,17 +1448,13 @@ export function PurchasesSection() {
                     </Field>
 
                     <Field label="금액">
-                      <TextInput
+                      <MoneyInput
                         required
-                        inputMode="numeric"
-                        min="0"
-                        step="1000"
-                        type="number"
-                        value={form.unitPrice || ""}
-                        onChange={(event) =>
+                        value={form.unitPrice}
+                        onValueChange={(value) =>
                           setForm((current) => ({
                             ...current,
-                            unitPrice: Number(event.target.value),
+                            unitPrice: value,
                           }))
                         }
                       />
@@ -1413,7 +1513,7 @@ export function PurchasesSection() {
                       상세 설정
                     </p>
                     <p className="text-[13px] leading-6 text-[var(--text-label)]">
-                      공간, 분류, 일정과 결제 방식은 필요할 때만 추가하세요.
+                      기본 구매 정보와 배송, 시공 정보를 필요한 만큼만 이어서 입력하세요.
                     </p>
                   </div>
 
@@ -1424,29 +1524,16 @@ export function PurchasesSection() {
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
-                            room: event.target.value as Room,
+                            room: event.target.value as PurchaseFormValues["room"],
                           }))
                         }
                       >
-                        {ROOM_OPTIONS.map((room) => (
+                        {detailRoomOptions.map((room) => (
                           <option key={room} value={room}>
                             {room}
                           </option>
                         ))}
                       </SelectInput>
-                    </Field>
-
-                    <Field label="일정">
-                      <TextInput
-                        type="date"
-                        value={form.scheduleDate}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            scheduleDate: event.target.value,
-                          }))
-                        }
-                      />
                     </Field>
 
                     <Field label="분류">
@@ -1519,6 +1606,251 @@ export function PurchasesSection() {
                       </Field>
                     ) : null}
                   </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="planner-panel-muted flex items-center justify-between gap-3 p-3.5">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          배송 정보
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                          배송이 필요한 항목만 날짜 입력
+                        </p>
+                      </div>
+                      <input
+                        checked={form.deliveryRequired}
+                        className="h-4 w-4 accent-[var(--primary)]"
+                        type="checkbox"
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            deliveryRequired: event.target.checked,
+                            deliveryDate: event.target.checked
+                              ? current.deliveryDate
+                              : "",
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="planner-panel-muted flex items-center justify-between gap-3 p-3.5">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          시공 정보
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                          시공 일정과 비용이 필요한 항목만 입력
+                        </p>
+                      </div>
+                      <input
+                        checked={form.constructionRequired}
+                        className="h-4 w-4 accent-[var(--primary)]"
+                        type="checkbox"
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            constructionRequired: event.target.checked,
+                            category: event.target.checked ? "시공" : current.category,
+                            constructionDate: event.target.checked
+                              ? current.constructionDate
+                              : "",
+                            constructionStartTime: event.target.checked
+                              ? current.constructionStartTime
+                              : "",
+                            constructionCompany: event.target.checked
+                              ? current.constructionCompany
+                              : "",
+                            constructionTotalCost: event.target.checked
+                              ? current.constructionTotalCost
+                              : "",
+                            constructionDeposit: event.target.checked
+                              ? current.constructionDeposit
+                              : "",
+                            constructionBalance: event.target.checked
+                              ? current.constructionBalance
+                              : "",
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  {purchaseTimelineText ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <SummaryChip>{purchaseTimelineText}</SummaryChip>
+                    </div>
+                  ) : null}
+
+                  {form.deliveryRequired ? (
+                    <div className="planner-panel-muted mt-4 p-4">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          배송 정보
+                        </p>
+                        <p className="text-[13px] leading-6 text-[var(--text-label)]">
+                          배송 날짜만 기록하면 배송 관리 화면과 바로 연결됩니다.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 max-w-[14rem]">
+                        <Field label="배송일">
+                          <TextInput
+                            type="date"
+                            value={form.deliveryDate}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                deliveryDate: event.target.value,
+                              }))
+                            }
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {form.constructionRequired ? (
+                    <div className="planner-panel-muted mt-4 p-4">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          시공 정보
+                        </p>
+                        <p className="text-[13px] leading-6 text-[var(--text-label)]">
+                          일정, 업체, 비용만 간단히 정리하면 이후 시공 관리와 바로 연결돼요.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 grid gap-4">
+                        <div className="grid gap-4 sm:max-w-[14rem]">
+                          <Field label="시공 상태">
+                            <SelectInput
+                              value={form.constructionStatus}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  constructionStatus:
+                                    event.target.value as ConstructionStatus,
+                                }))
+                              }
+                            >
+                              {CONSTRUCTION_STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>
+                                  {CONSTRUCTION_STATUS_LABELS[status]}
+                                </option>
+                              ))}
+                            </SelectInput>
+                          </Field>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">
+                            📅 일정
+                          </p>
+                          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                            <Field label="날짜">
+                              <TextInput
+                                type="date"
+                                value={form.constructionDate}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionDate: event.target.value,
+                                  }))
+                                }
+                              />
+                            </Field>
+
+                            <Field label="시작시간">
+                              <TextInput
+                                type="time"
+                                value={form.constructionStartTime}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionStartTime: event.target.value,
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">
+                            🏢 업체
+                          </p>
+                          <div className="mt-3 max-w-[18rem]">
+                            <Field label="업체명">
+                              <TextInput
+                                placeholder="예: 화이트홈"
+                                value={form.constructionCompany}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionCompany: event.target.value,
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">
+                            💰 비용
+                          </p>
+                          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                            <Field label="총금액">
+                              <MoneyInput
+                                value={form.constructionTotalCost}
+                                onValueChange={(value) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionTotalCost: value,
+                                  }))
+                                }
+                              />
+                            </Field>
+
+                            <Field label="계약금">
+                              <MoneyInput
+                                value={form.constructionDeposit}
+                                onValueChange={(value) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionDeposit: value,
+                                  }))
+                                }
+                              />
+                            </Field>
+
+                            <Field label="잔금">
+                              <MoneyInput
+                                value={form.constructionBalance}
+                                onValueChange={(value) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    constructionBalance: value,
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <SummaryChip>
+                              총금액 {formatCurrency(draftConstructionTotalCost)}
+                            </SummaryChip>
+                            <SummaryChip>
+                              계약금 {formatCurrency(draftConstructionDeposit)}
+                            </SummaryChip>
+                            <SummaryChip tone="highlight">
+                              잔금 {formatCurrency(draftConstructionBalance)}
+                            </SummaryChip>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 grid gap-4">
                     <Field

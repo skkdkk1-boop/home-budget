@@ -7,6 +7,12 @@ export const ROOM_OPTIONS = [
   "다용도실",
 ] as const;
 
+export const PURCHASE_MULTI_ROOM_EXTRA_OPTIONS = ["시공", "기타"] as const;
+export const PURCHASE_MULTI_ROOM_OPTIONS = [
+  ...ROOM_OPTIONS,
+  ...PURCHASE_MULTI_ROOM_EXTRA_OPTIONS,
+] as const;
+
 export const SELL_LOCATION_OPTIONS = [
   "거실",
   "주방",
@@ -27,12 +33,6 @@ export const PURCHASE_CATEGORY_OPTIONS = [
 
 export const PURCHASE_STATUS_OPTIONS = ["planned", "completed", "shipping"] as const;
 export const PAYMENT_TYPE_OPTIONS = ["lump", "installment"] as const;
-export const SHIPPING_STATUS_OPTIONS = [
-  "beforeOrder",
-  "ordered",
-  "shipping",
-  "delivered",
-] as const;
 export const CONSTRUCTION_STATUS_OPTIONS = [
   "before",
   "scheduled",
@@ -58,11 +58,11 @@ export const MOVE_ITEM_STATUS_OPTIONS = [
 ] as const;
 
 export type Room = (typeof ROOM_OPTIONS)[number];
+export type PurchaseRoom = (typeof PURCHASE_MULTI_ROOM_OPTIONS)[number];
 export type SellLocation = (typeof SELL_LOCATION_OPTIONS)[number];
 export type PurchaseCategory = (typeof PURCHASE_CATEGORY_OPTIONS)[number];
 export type PurchaseStatus = (typeof PURCHASE_STATUS_OPTIONS)[number];
 export type PaymentType = (typeof PAYMENT_TYPE_OPTIONS)[number];
-export type ShippingStatus = (typeof SHIPPING_STATUS_OPTIONS)[number];
 export type ConstructionStatus = (typeof CONSTRUCTION_STATUS_OPTIONS)[number];
 export type SellItemStatus = (typeof SELL_ITEM_STATUS_OPTIONS)[number];
 export type DisposalStatus = (typeof DISPOSAL_STATUS_OPTIONS)[number];
@@ -78,13 +78,6 @@ export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
 export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
   lump: "일시불",
   installment: "할부",
-};
-
-export const SHIPPING_STATUS_LABELS: Record<ShippingStatus, string> = {
-  beforeOrder: "주문 전",
-  ordered: "주문 완료",
-  shipping: "배송 중",
-  delivered: "배송 완료",
 };
 
 export const CONSTRUCTION_STATUS_LABELS: Record<ConstructionStatus, string> = {
@@ -118,13 +111,6 @@ export const PURCHASE_STATUS_TONES: Record<PurchaseStatus, StatusTone> = {
   planned: "warning",
   completed: "success",
   shipping: "info",
-};
-
-export const SHIPPING_STATUS_TONES: Record<ShippingStatus, StatusTone> = {
-  beforeOrder: "neutral",
-  ordered: "info",
-  shipping: "warning",
-  delivered: "success",
 };
 
 export const CONSTRUCTION_STATUS_TONES: Record<
@@ -171,7 +157,7 @@ export interface Fund extends BaseEntity {
 
 export interface Purchase extends BaseEntity {
   status: PurchaseStatus;
-  room: Room;
+  room: PurchaseRoom;
   category: PurchaseCategory;
   name: string;
   unitPrice: number;
@@ -180,27 +166,37 @@ export interface Purchase extends BaseEntity {
   paymentType: PaymentType;
   installmentMonths: number;
   monthlyPayment: number;
-  scheduleDate: string;
   link: string;
   note: string;
+  deliveryRequired: boolean;
+  deliveryDate: string;
+  constructionRequired: boolean;
+  constructionStatus?: ConstructionStatus;
+  constructionDate: string;
+  constructionStartTime: string;
+  constructionCompany: string;
+  constructionTotalCost: number;
+  constructionDeposit: number;
+  constructionBalance: number;
 }
 
 export interface Shipping extends BaseEntity {
   itemName: string;
-  room: Room;
-  shippingStatus: ShippingStatus;
-  expectedDate: string;
+  room: PurchaseRoom;
+  deliveryDate: string;
   note: string;
 }
 
 export interface Construction extends BaseEntity {
   name: string;
-  room: Room;
+  room: PurchaseRoom;
   constructionStatus: ConstructionStatus;
   constructionDate: string;
-  cost: number;
-  company: string;
-  contact: string;
+  constructionStartTime: string;
+  constructionCompany: string;
+  constructionTotalCost: number;
+  constructionDeposit: number;
+  constructionBalance: number;
   note: string;
 }
 
@@ -237,8 +233,6 @@ export interface MoveItem extends BaseEntity {
 export interface PlannerData {
   funds: Fund[];
   purchases: Purchase[];
-  shippings: Shipping[];
-  constructions: Construction[];
   sellItems: SellItem[];
   disposalItems: DisposalItem[];
   moveItems: MoveItem[];
@@ -264,34 +258,37 @@ export interface FundFormValues {
 
 export interface PurchaseFormValues {
   status: PurchaseStatus;
-  room: Room;
+  room: PurchaseRoom;
   category: PurchaseCategory;
   name: string;
   unitPrice: number;
   quantity: number;
   paymentType: PaymentType;
   installmentMonths: number;
-  scheduleDate: string;
   link: string;
   note: string;
-}
-
-export interface ShippingFormValues {
-  itemName: string;
-  room: Room;
-  shippingStatus: ShippingStatus;
-  expectedDate: string;
-  note: string;
+  deliveryRequired: boolean;
+  deliveryDate: string;
+  constructionRequired: boolean;
+  constructionStatus?: ConstructionStatus;
+  constructionDate: string;
+  constructionStartTime: string;
+  constructionCompany: string;
+  constructionTotalCost: number;
+  constructionDeposit: number;
+  constructionBalance: number;
 }
 
 export interface ConstructionFormValues {
   name: string;
-  room: Room;
+  room: PurchaseRoom;
   constructionStatus: ConstructionStatus;
   constructionDate: string;
-  cost: number;
-  company: string;
-  contact: string;
+  constructionStartTime: string;
+  constructionCompany: string;
+  constructionTotalCost: number;
+  constructionDeposit: number;
+  constructionBalance: number;
   note: string;
 }
 

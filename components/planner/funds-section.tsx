@@ -4,7 +4,12 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
 import type { Fund, FundFormValues } from "@/lib/planner-types";
-import { compareRecent, formatCurrency, formatDate } from "@/lib/planner-utils";
+import {
+  compareRecent,
+  formatCurrency,
+  formatDate,
+  parseMoneyInput,
+} from "@/lib/planner-utils";
 
 import { usePlannerData } from "./planner-provider";
 import {
@@ -14,6 +19,7 @@ import {
   Field,
   FormDialog,
   LoadingState,
+  MoneyInput,
   RowActionMenu,
   SelectInput,
   SectionHeader,
@@ -25,9 +31,13 @@ import {
   ValuePreviewPanel,
 } from "./ui";
 
-const emptyFundForm: FundFormValues = {
+type FundFormState = Omit<FundFormValues, "amount"> & {
+  amount: string;
+};
+
+const emptyFundForm: FundFormState = {
   name: "",
-  amount: 0,
+  amount: "",
   isUsable: true,
 };
 
@@ -36,7 +46,7 @@ export function FundsSection() {
     usePlannerData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
-  const [form, setForm] = useState<FundFormValues>(emptyFundForm);
+  const [form, setForm] = useState<FundFormState>(emptyFundForm);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -48,7 +58,7 @@ export function FundsSection() {
     if (editingFund) {
       setForm({
         name: editingFund.name,
-        amount: editingFund.amount,
+        amount: String(editingFund.amount),
         isUsable: editingFund.isUsable,
       });
       return;
@@ -74,10 +84,15 @@ export function FundsSection() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const nextInput: FundFormValues = {
+      ...form,
+      amount: parseMoneyInput(form.amount),
+    };
+
     if (editingFund) {
-      updateFund(editingFund.id, form);
+      updateFund(editingFund.id, nextInput);
     } else {
-      addFund(form);
+      addFund(nextInput);
     }
 
     setIsDialogOpen(false);
@@ -246,17 +261,13 @@ export function FundsSection() {
             </Field>
 
             <Field label="금액">
-              <TextInput
+              <MoneyInput
                 required
-                inputMode="numeric"
-                min="0"
-                step="1000"
-                type="number"
                 value={form.amount}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   setForm((current) => ({
                     ...current,
-                    amount: Number(event.target.value),
+                    amount: value,
                   }))
                 }
               />
@@ -285,7 +296,7 @@ export function FundsSection() {
                 : "총 자금에는 포함되지만 사용 가능 자금에는 제외돼요."
             }
             label="미리보기"
-            value={formatCurrency(form.amount)}
+            value={formatCurrency(parseMoneyInput(form.amount))}
           />
 
           <DialogActions

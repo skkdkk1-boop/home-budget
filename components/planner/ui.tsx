@@ -10,7 +10,11 @@ import type {
 } from "react";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 
-import { cn } from "@/lib/planner-utils";
+import {
+  cn,
+  formatMoneyInput,
+  sanitizeMoneyInput,
+} from "@/lib/planner-utils";
 
 import { MoreHorizontalIcon } from "./nav-icons";
 
@@ -329,7 +333,7 @@ export function BulkActionBar({
           <button
             type="button"
             className="text-[13px] font-medium text-[var(--text-label)] transition hover:text-[var(--text-secondary)]"
-            onClick={onClear}
+            onClick={() => onClear()}
           >
             선택 해제
           </button>
@@ -649,7 +653,7 @@ export function FormDialog({
               {description}
             </p>
           </div>
-          <Button aria-label="닫기" onClick={onClose} size="sm" variant="ghost">
+          <Button aria-label="닫기" onClick={() => onClose()} size="sm" variant="ghost">
             닫기
           </Button>
         </div>
@@ -708,7 +712,7 @@ export function DialogActions({
         className,
       )}
     >
-      <Button className="w-full sm:w-auto" variant="secondary" onClick={onCancel}>
+      <Button className="w-full sm:w-auto" variant="secondary" onClick={() => onCancel()}>
         {cancelLabel}
       </Button>
       <Button
@@ -792,6 +796,63 @@ export const TextInput = forwardRef<
 >(function TextInput({ className, ...props }, ref) {
   return <input ref={ref} className={cn(inputClassName, className)} {...props} />;
 });
+
+type MoneyInputProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type" | "value" | "onChange"
+> & {
+  value: string | number;
+  onValueChange: (value: string) => void;
+};
+
+export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(
+  function MoneyInput(
+    { className, onBlur, onFocus, onValueChange, value, ...props },
+    ref,
+  ) {
+    const [isFocused, setIsFocused] = useState(false);
+    const [draftValue, setDraftValue] = useState(() => formatMoneyInput(value));
+    const rawValue =
+      typeof value === "number" ? (value > 0 ? String(value) : "") : sanitizeMoneyInput(value);
+
+    useEffect(() => {
+      if (isFocused) {
+        return;
+      }
+
+      setDraftValue(formatMoneyInput(value));
+    }, [isFocused, value]);
+
+    return (
+      <TextInput
+        {...props}
+        ref={ref}
+        className={className}
+        inputMode="numeric"
+        type="text"
+        value={draftValue}
+        onBlur={(event) => {
+          setIsFocused(false);
+          setDraftValue(formatMoneyInput(rawValue));
+          onBlur?.(event);
+        }}
+        onChange={(event) => {
+          const nextValue =
+            typeof event.target.value === "string" ? event.target.value : "";
+          const sanitized = sanitizeMoneyInput(nextValue);
+
+          setDraftValue(sanitized);
+          onValueChange(sanitized);
+        }}
+        onFocus={(event) => {
+          setIsFocused(true);
+          setDraftValue(rawValue);
+          onFocus?.(event);
+        }}
+      />
+    );
+  },
+);
 
 export const SelectInput = forwardRef<
   HTMLSelectElement,
