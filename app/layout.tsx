@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 
 import { PlannerAppLayout } from "@/components/planner/app-layout";
+import { PlannerAuthProvider } from "@/components/planner/auth-provider";
 import { PlannerProvider } from "@/components/planner/planner-provider";
 
 import "./globals.css";
@@ -19,9 +20,11 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <PlannerProvider>
-          <PlannerAppLayout>{children}</PlannerAppLayout>
-        </PlannerProvider>
+        <PlannerAuthProvider>
+          <PlannerProvider>
+            <PlannerAppLayout>{children}</PlannerAppLayout>
+          </PlannerProvider>
+        </PlannerAuthProvider>
       </body>
     </html>
   );

@@ -20,7 +20,25 @@ import {
   ROOM_OPTIONS,
 } from "@/lib/planner-types";
 
-export const STORAGE_KEY = "jeongri-home-planner-v1";
+export const LEGACY_STORAGE_KEY = "jeongri-home-planner-v1";
+
+export const PLANNER_STORAGE_KEYS = {
+  local: "home-budget-local",
+  preview: "home-budget-preview",
+  production: "home-budget-prod",
+} as const;
+
+export type PlannerStorageEnvironment = keyof typeof PLANNER_STORAGE_KEYS;
+
+const PRODUCTION_HOSTS = new Set(
+  [
+    "home-budget-inky.vercel.app",
+    process.env.NEXT_PUBLIC_PRODUCTION_HOSTS,
+  ]
+    .flatMap((value) => (value ? value.split(",") : []))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 const currencyFormatter = new Intl.NumberFormat("ko-KR");
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -48,6 +66,46 @@ export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   upcomingShippings: [],
   upcomingConstructions: [],
 };
+
+export function detectPlannerStorageEnvironment(
+  hostname?: string,
+): PlannerStorageEnvironment {
+  const host = (hostname ?? "").trim().toLowerCase();
+
+  if (!host) {
+    return process.env.NODE_ENV === "development" ? "local" : "preview";
+  }
+
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "[::1]" ||
+    host.endsWith(".local")
+  ) {
+    return "local";
+  }
+
+  if (PRODUCTION_HOSTS.has(host)) {
+    return "production";
+  }
+
+  if (host.endsWith(".vercel.app")) {
+    return "preview";
+  }
+
+  return "production";
+}
+
+export function getPlannerStorageConfig(hostname?: string) {
+  const environment = detectPlannerStorageEnvironment(hostname);
+
+  return {
+    environment,
+    storageKey: PLANNER_STORAGE_KEYS[environment],
+    shouldUseSampleData: environment !== "production",
+    shouldMigrateLegacyData: environment === "production",
+  };
+}
 
 export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");

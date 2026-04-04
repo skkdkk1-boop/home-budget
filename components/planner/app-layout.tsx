@@ -3,9 +3,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import { cn } from "@/lib/planner-utils";
 
+import { usePlannerAuth } from "./auth-provider";
 import {
   BoxesIcon,
   HammerIcon,
@@ -14,6 +16,7 @@ import {
   TruckIcon,
   WalletIcon,
 } from "./nav-icons";
+import { Button, SummaryChip } from "./ui";
 
 const navigationItems = [
   {
@@ -68,6 +71,36 @@ export function PlannerAppLayout({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const { isConfigured, isReady, user, signInWithGoogle, signOut } = usePlannerAuth();
+  const [pendingAction, setPendingAction] = useState<"signin" | "signout" | null>(null);
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    "로그인됨";
+
+  async function handleSignIn() {
+    try {
+      setPendingAction("signin");
+      await signInWithGoogle();
+    } catch (error) {
+      console.error(error);
+      window.alert("Google 로그인 설정을 다시 확인해주세요.");
+      setPendingAction(null);
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      setPendingAction("signout");
+      await signOut();
+    } catch (error) {
+      console.error(error);
+      window.alert("로그아웃 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.");
+      setPendingAction(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-transparent text-[var(--text-primary)]">
@@ -80,28 +113,61 @@ export function PlannerAppLayout({
               </h1>
             </div>
 
-            <nav className="hidden flex-wrap gap-1.5 md:flex">
-              {navigationItems.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                const Icon = item.icon;
+            <div className="flex items-center gap-2 sm:gap-3">
+              <nav className="hidden flex-wrap gap-1.5 md:flex">
+                {navigationItems.map((item) => {
+                  const active = isActivePath(pathname, item.href);
+                  const Icon = item.icon;
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "planner-tab inline-flex items-center gap-2 border border-transparent px-3.5 py-2 text-[13px] font-semibold transition",
-                      active
-                        ? "bg-[var(--surface-blue)] text-[var(--primary)]"
-                        : "bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]",
-                    )}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "planner-tab inline-flex items-center gap-2 border border-transparent px-3.5 py-2 text-[13px] font-semibold transition",
+                        active
+                          ? "bg-[var(--surface-blue)] text-[var(--primary)]"
+                          : "bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]",
+                      )}
+                    >
+                      <Icon />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {isConfigured ? (
+                user ? (
+                  <div className="flex items-center gap-2">
+                    <SummaryChip className="hidden max-w-[12rem] truncate sm:inline-flex">
+                      {displayName}
+                    </SummaryChip>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void handleSignOut()}
+                      disabled={!isReady || pendingAction !== null}
+                    >
+                      {pendingAction === "signout" ? "로그아웃 중" : "로그아웃"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => void handleSignIn()}
+                    disabled={!isReady || pendingAction !== null}
                   >
-                    <Icon />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
+                    {pendingAction === "signin" ? "연결 중" : "Google로 로그인"}
+                  </Button>
+                )
+              ) : (
+                <SummaryChip className="hidden sm:inline-flex">
+                  로그인 설정 준비 중
+                </SummaryChip>
+              )}
+            </div>
           </div>
         </div>
       </header>

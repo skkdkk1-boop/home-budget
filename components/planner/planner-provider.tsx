@@ -19,10 +19,11 @@ import {
   buildDashboardSummary,
   calculatePurchaseAmounts,
   createId,
+  getPlannerStorageConfig,
+  LEGACY_STORAGE_KEY,
   normalizeAmount,
   normalizeLink,
   parseStoredPlannerData,
-  STORAGE_KEY,
 } from "@/lib/planner-utils";
 
 interface PlannerContextValue {
@@ -176,22 +177,36 @@ function removeEntitiesByIds<T extends { id: string }>(items: T[], ids: string[]
 export function PlannerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<PlannerData>(EMPTY_PLANNER_DATA);
   const [isReady, setIsReady] = useState(false);
+  const [storageKey, setStorageKey] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const { storageKey, shouldMigrateLegacyData, shouldUseSampleData } =
+      getPlannerStorageConfig(window.location.hostname);
+    const raw = window.localStorage.getItem(storageKey);
     const parsed = raw ? parseStoredPlannerData(raw) : null;
+    let nextData = parsed;
 
-    setData(parsed ?? buildSamplePlannerData());
+    if (!nextData && shouldMigrateLegacyData) {
+      const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      nextData = legacyRaw ? parseStoredPlannerData(legacyRaw) : null;
+
+      if (nextData) {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextData));
+      }
+    }
+
+    setStorageKey(storageKey);
+    setData(nextData ?? (shouldUseSampleData ? buildSamplePlannerData() : EMPTY_PLANNER_DATA));
     setIsReady(true);
   }, []);
 
   useEffect(() => {
-    if (!isReady) {
+    if (!isReady || !storageKey) {
       return;
     }
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data, isReady]);
+    window.localStorage.setItem(storageKey, JSON.stringify(data));
+  }, [data, isReady, storageKey]);
 
   const summary = buildDashboardSummary(data);
 
