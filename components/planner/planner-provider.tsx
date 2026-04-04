@@ -1,7 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { buildSamplePlannerData } from "@/lib/planner-sample-data";
 import type {
@@ -15,16 +22,23 @@ import type {
   SellItemFormValues,
 } from "@/lib/planner-types";
 import {
+  isMissingPlannerDocumentsTableError,
+  loadPlannerDataForUser,
+  savePlannerDataForUser,
+} from "@/lib/planner-supabase";
+import {
   EMPTY_PLANNER_DATA,
   buildDashboardSummary,
   calculatePurchaseAmounts,
   createId,
   getPlannerStorageConfig,
+  hasPlannerDataContent,
   LEGACY_STORAGE_KEY,
   normalizeAmount,
   normalizeLink,
   parseStoredPlannerData,
 } from "@/lib/planner-utils";
+import { usePlannerAuth } from "./auth-provider";
 
 interface PlannerContextValue {
   data: PlannerData;
@@ -174,39 +188,155 @@ function removeEntitiesByIds<T extends { id: string }>(items: T[], ids: string[]
   return items.filter((item) => !idSet.has(item.id));
 }
 
+type PlannerPersistenceTarget =
+  | {
+      type: "local";
+      storageKey: string;
+    }
+  | {
+      type: "remote";
+      storageKey: string;
+      userId: string;
+    }
+  | null;
+
 export function PlannerProvider({ children }: { children: ReactNode }) {
+  const { isConfigured, isReady: isAuthReady, user } = usePlannerAuth();
   const [data, setData] = useState<PlannerData>(EMPTY_PLANNER_DATA);
   const [isReady, setIsReady] = useState(false);
-  const [storageKey, setStorageKey] = useState<string | null>(null);
+  const [persistenceTarget, setPersistenceTarget] =
+    useState<PlannerPersistenceTarget>(null);
+  const skipNextRemotePersistRef = useRef(true);
+  const lastRemoteSnapshotRef = useRef<string | null>(null);
+  const serializedData = useMemo(() => JSON.stringify(data), [data]);
 
   useEffect(() => {
-    const { storageKey, shouldMigrateLegacyData, shouldUseSampleData } =
-      getPlannerStorageConfig(window.location.hostname);
-    const raw = window.localStorage.getItem(storageKey);
-    const parsed = raw ? parseStoredPlannerData(raw) : null;
-    let nextData = parsed;
-
-    if (!nextData && shouldMigrateLegacyData) {
-      const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-      nextData = legacyRaw ? parseStoredPlannerData(legacyRaw) : null;
-
-      if (nextData) {
-        window.localStorage.setItem(storageKey, JSON.stringify(nextData));
-      }
-    }
-
-    setStorageKey(storageKey);
-    setData(nextData ?? (shouldUseSampleData ? buildSamplePlannerData() : EMPTY_PLANNER_DATA));
-    setIsReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isReady || !storageKey) {
+    if (!isAuthReady) {
       return;
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(data));
-  }, [data, isReady, storageKey]);
+    let isCancelled = false;
+
+    async function hydratePlannerData() {
+      setIsReady(false);
+
+      const {
+        storageKey,
+        shouldMigrateLegacyData,
+        shouldUseSampleData,
+      } = getPlannerStorageConfig(window.location.hostname);
+      const localRaw = window.localStorage.getItem(storageKey);
+      const localParsed = localRaw ? parseStoredPlannerData(localRaw) : null;
+      let localData = localParsed;
+
+      if (!localData && shouldMigrateLegacyData) {
+        const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+        localData = legacyRaw ? parseStoredPlannerData(legacyRaw) : null;
+
+        if (localData) {
+          window.localStorage.setItem(storageKey, JSON.stringify(localData));
+        }
+      }
+
+      if (!user || !isConfigured) {
+        const guestData =
+          localData ?? (shouldUseSampleData ? buildSamplePlannerData() : EMPTY_PLANNER_DATA);
+
+        if (isCancelled) {
+          return;
+        }
+
+        skipNextRemotePersistRef.current = true;
+        lastRemoteSnapshotRef.current = null;
+        setPersistenceTarget({
+          type: "local",
+          storageKey,
+        });
+        setData(guestData);
+        setIsReady(true);
+        return;
+      }
+
+      const remoteResult = await loadPlannerDataForUser(user.id);
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (remoteResult.error) {
+        console.error(remoteResult.error);
+        const fallbackData =
+          localData ?? (shouldUseSampleData ? buildSamplePlannerData() : EMPTY_PLANNER_DATA);
+
+        if (isMissingPlannerDocumentsTableError(remoteResult.error)) {
+          console.warn(
+            "planner_documents 테이블이 아직 없어 localStorage 모드로 동작합니다.",
+          );
+        }
+
+        skipNextRemotePersistRef.current = true;
+        lastRemoteSnapshotRef.current = null;
+        setPersistenceTarget({
+          type: "local",
+          storageKey,
+        });
+        setData(fallbackData);
+        setIsReady(true);
+        return;
+      }
+
+      const shouldBootstrapRemote =
+        !remoteResult.data && hasPlannerDataContent(localData);
+      const nextData = remoteResult.data ?? localData ?? EMPTY_PLANNER_DATA;
+
+      skipNextRemotePersistRef.current = !shouldBootstrapRemote;
+      lastRemoteSnapshotRef.current = shouldBootstrapRemote
+        ? null
+        : JSON.stringify(nextData);
+      setPersistenceTarget({
+        type: "remote",
+        storageKey,
+        userId: user.id,
+      });
+      setData(nextData);
+      setIsReady(true);
+    }
+
+    void hydratePlannerData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthReady, isConfigured, user]);
+
+  useEffect(() => {
+    if (!isReady || !persistenceTarget) {
+      return;
+    }
+
+    if (persistenceTarget.type === "local") {
+      window.localStorage.setItem(persistenceTarget.storageKey, serializedData);
+      return;
+    }
+
+    if (skipNextRemotePersistRef.current) {
+      skipNextRemotePersistRef.current = false;
+      lastRemoteSnapshotRef.current = serializedData;
+      return;
+    }
+
+    if (lastRemoteSnapshotRef.current === serializedData) {
+      return;
+    }
+
+    lastRemoteSnapshotRef.current = serializedData;
+
+    void savePlannerDataForUser(persistenceTarget.userId, data).then(({ error }) => {
+      if (error) {
+        console.error(error);
+      }
+    });
+  }, [data, isReady, persistenceTarget, serializedData]);
 
   const summary = buildDashboardSummary(data);
 

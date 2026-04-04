@@ -67,6 +67,20 @@ export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   upcomingConstructions: [],
 };
 
+export function hasPlannerDataContent(data: PlannerData | null | undefined) {
+  if (!data) {
+    return false;
+  }
+
+  return (
+    data.funds.length > 0 ||
+    data.purchases.length > 0 ||
+    data.sellItems.length > 0 ||
+    data.disposalItems.length > 0 ||
+    data.moveItems.length > 0
+  );
+}
+
 export function detectPlannerStorageEnvironment(
   hostname?: string,
 ): PlannerStorageEnvironment {
