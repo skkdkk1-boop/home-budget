@@ -12,6 +12,7 @@ import type {
   PlannerData,
   PurchaseStatus,
   PurchaseFormValues,
+  SellItemStatus,
   SellItemFormValues,
   ShippingFormValues,
 } from "@/lib/planner-types";
@@ -48,8 +49,11 @@ interface PlannerContextValue {
   deleteConstruction: (id: string) => void;
   deleteConstructions: (ids: string[]) => void;
   addSellItem: (input: SellItemFormValues) => void;
+  addSellItems: (inputs: SellItemFormValues[]) => void;
   updateSellItem: (id: string, input: SellItemFormValues) => void;
+  updateSellItemStatuses: (ids: string[], status: SellItemStatus) => void;
   deleteSellItem: (id: string) => void;
+  deleteSellItems: (ids: string[]) => void;
   addDisposalItem: (input: DisposalItemFormValues) => void;
   updateDisposalItem: (id: string, input: DisposalItemFormValues) => void;
   deleteDisposalItem: (id: string) => void;
@@ -402,6 +406,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const addSellItems = (inputs: SellItemFormValues[]) => {
+    const nextSellItems = inputs.map((input) =>
+      createTimestampedEntity("sell-item", normalizeSellItemInput(input)),
+    );
+
+    setData((current) => ({
+      ...current,
+      sellItems: [...nextSellItems, ...current.sellItems],
+    }));
+  };
+
   const updateSellItem = (id: string, input: SellItemFormValues) => {
     const now = new Date().toISOString();
     const normalized = normalizeSellItemInput(input);
@@ -416,10 +431,33 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const updateSellItemStatuses = (ids: string[], status: SellItemStatus) => {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const idSet = new Set(ids);
+    const now = new Date().toISOString();
+
+    setData((current) => ({
+      ...current,
+      sellItems: current.sellItems.map((item) =>
+        idSet.has(item.id) ? { ...item, status, updatedAt: now } : item,
+      ),
+    }));
+  };
+
   const deleteSellItem = (id: string) => {
     setData((current) => ({
       ...current,
       sellItems: removeEntityById(current.sellItems, id),
+    }));
+  };
+
+  const deleteSellItems = (ids: string[]) => {
+    setData((current) => ({
+      ...current,
+      sellItems: removeEntitiesByIds(current.sellItems, ids),
     }));
   };
 
@@ -527,8 +565,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         deleteConstruction,
         deleteConstructions,
         addSellItem,
+        addSellItems,
         updateSellItem,
+        updateSellItemStatuses,
         deleteSellItem,
+        deleteSellItems,
         addDisposalItem,
         updateDisposalItem,
         deleteDisposalItem,
