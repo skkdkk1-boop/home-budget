@@ -8,6 +8,7 @@ import { useState } from "react";
 import { cn } from "@/lib/planner-utils";
 
 import { usePlannerAuth } from "./auth-provider";
+import { ShareLinkButton } from "./share-link-button";
 import {
   BoxesIcon,
   HammerIcon,
@@ -73,6 +74,7 @@ export function PlannerAppLayout({
   const pathname = usePathname();
   const { isConfigured, isReady, user, signInWithGoogle, signOut } = usePlannerAuth();
   const [pendingAction, setPendingAction] = useState<"signin" | "signout" | null>(null);
+  const isShareRoute = pathname.startsWith("/share/");
 
   const displayName =
     user?.user_metadata?.full_name ||
@@ -100,6 +102,14 @@ export function PlannerAppLayout({
       window.alert("로그아웃 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.");
       setPendingAction(null);
     }
+  }
+
+  if (isShareRoute) {
+    return (
+      <div className="min-h-screen bg-transparent text-[var(--text-primary)]">
+        {children}
+      </div>
+    );
   }
 
   return (
@@ -143,6 +153,7 @@ export function PlannerAppLayout({
                     <SummaryChip className="hidden max-w-[12rem] truncate sm:inline-flex">
                       {displayName}
                     </SummaryChip>
+                    <ShareLinkButton />
                     <Button
                       size="sm"
                       variant="secondary"
