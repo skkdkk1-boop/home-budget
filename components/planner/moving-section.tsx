@@ -79,8 +79,8 @@ export function MovingSection() {
   }
 
   return (
-    <div className="page-shell">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="page-shell relative z-0">
+      <div className="relative z-0 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {movingSummaryCards.map((card) => (
           <SummaryCard
             key={card.label}
@@ -92,7 +92,7 @@ export function MovingSection() {
         ))}
       </div>
 
-      <SurfaceCard>
+      <SurfaceCard className="relative z-0">
         <div className="flex flex-col gap-4">
           <SegmentedControl fullWidth className="grid-cols-3 sm:inline-flex sm:w-auto">
             {movingTabs.map((tab) => (

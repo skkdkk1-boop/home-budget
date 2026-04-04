@@ -296,7 +296,15 @@ export function MovingSalesSection() {
     selectedVisibleCount > 0 && !isAllVisibleSelected;
 
   useEffect(() => {
-    setSelectedSellIds((current) => keepVisibleSelections(current, visibleSellIds));
+    setSelectedSellIds((current) => {
+      const next = keepVisibleSelections(current, visibleSellIds);
+
+      if (JSON.stringify(current) === JSON.stringify(next)) {
+        return current;
+      }
+
+      return next;
+    });
   }, [visibleSellIds]);
 
   useEffect(() => {
