@@ -8,9 +8,10 @@
   --surface-blue: #eef5ff;
   --border: #e5e8eb;
   --border-strong: #d1d6db;
-  --text-primary: #191f28;
-  --text-secondary: #4e5968;
-  --text-muted: #8b95a1;
+  --text-primary: #111111;
+  --text-secondary: #333333;
+  --text-label: #888888;
+  --text-muted: #aaaaaa;
   --primary: #3182f6;
   --primary-hover: #2272eb;
   --success: #0f9f6d;
@@ -69,11 +70,11 @@ textarea {
 
 @layer components {
   .planner-shell {
-    @apply mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-28 pt-7 sm:gap-7 sm:px-6 lg:px-10 lg:pb-14 lg:pt-8;
+    @apply mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-28 pt-5 sm:gap-6 sm:px-6 sm:pt-6 lg:px-10 lg:pb-14 lg:pt-6;
   }
 
   .page-shell {
-    @apply flex flex-col gap-6 sm:gap-7;
+    @apply flex flex-col gap-5 sm:gap-6;
   }
 
   .radius-surface {
@@ -104,17 +105,6 @@ textarea {
 
   .planner-card-strong {
     box-shadow: var(--shadow-card-strong);
-  }
-
-  .planner-hero-card {
-    background:
-      radial-gradient(
-        circle at top right,
-        color-mix(in srgb, var(--primary) 13%, white) 0%,
-        transparent 42%
-      ),
-      var(--surface);
-    border: 1px solid color-mix(in srgb, var(--primary) 8%, var(--border));
   }
 
   .planner-panel-muted {
@@ -152,9 +142,9 @@ textarea {
   .table-shell {
     overflow: hidden;
     border-radius: var(--radius-card);
-    border: 1px solid color-mix(in srgb, var(--border) 90%, white);
+    border: 1px solid color-mix(in srgb, var(--border) 84%, white);
     background: var(--surface);
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 24px 48px -40px rgba(15, 23, 42, 0.2);
   }
 
   .data-table {
@@ -165,38 +155,50 @@ textarea {
   }
 
   .data-table thead {
-    background: color-mix(in srgb, var(--surface-muted) 88%, white);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-muted) 80%, white) 0%,
+      color-mix(in srgb, var(--surface-muted) 92%, white) 100%
+    );
   }
 
   .data-table th {
-    padding: 1rem 1.5rem;
-    color: var(--text-secondary);
+    padding: 0.9375rem 1.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, white);
+    color: var(--text-label);
     font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1.45;
+    font-weight: 500;
+    letter-spacing: -0.0125em;
+    line-height: 1.4;
     vertical-align: middle;
     white-space: nowrap;
   }
 
   .data-table td {
-    padding: 1.0625rem 1.5rem;
+    padding: 1.125rem 1.5rem;
+    background: var(--surface);
     color: var(--text-secondary);
+    font-size: 0.9375rem;
     vertical-align: middle;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 
   .data-table th:first-child,
   .data-table td:first-child {
-    padding-left: 1.75rem;
+    padding-left: 1.625rem;
   }
 
   .data-table th:last-child,
   .data-table td:last-child {
-    padding-right: 1.75rem;
+    padding-right: 1.625rem;
   }
 
   .data-table tbody td {
-    border-top: 1px solid color-mix(in srgb, var(--border) 92%, white);
+    border-top: 1px solid color-mix(in srgb, var(--border) 70%, white);
+  }
+
+  .data-table tbody tr:first-child td {
+    border-top: none;
   }
 
   .data-table tbody tr {
@@ -204,59 +206,149 @@ textarea {
   }
 
   .data-table tbody tr:hover td {
-    background: color-mix(in srgb, var(--surface-blue) 34%, var(--surface));
+    background: color-mix(in srgb, var(--surface-blue) 18%, var(--surface));
   }
 
-  .table-col-left {
+  .data-table td.table-col-left {
     text-align: left;
   }
 
-  .table-col-center {
+  .data-table th.table-col-left {
+    text-align: left;
+  }
+
+  .data-table td.table-col-center {
     text-align: center;
   }
 
-  .table-col-right {
+  .data-table th.table-col-center {
+    text-align: center;
+  }
+
+  .data-table td.table-col-right {
     text-align: right;
+  }
+
+  .data-table th.table-col-right {
+    text-align: right;
+  }
+
+  .numeric-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table-cell-stack {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.3125rem;
+  }
+
+  .table-cell-title {
+    min-width: 0;
+    color: var(--text-primary);
+    font-weight: 600;
+    line-height: 1.45;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .table-cell-meta {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .table-cell-note {
+    max-width: 18.5rem;
+    color: var(--text-label);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .table-action-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .table-col-status {
-    width: 7.75rem;
-    text-align: left;
+    width: 8.25rem;
+  }
+
+  .table-col-select {
+    width: 3.25rem;
   }
 
   .table-col-link {
-    width: 5.25rem;
-    text-align: center;
+    width: 5.75rem;
   }
 
   .table-col-actions {
-    width: 9rem;
-    text-align: center;
+    width: 3.875rem;
   }
 
   .table-col-qty {
-    width: 5rem;
-    text-align: center;
+    width: 5.25rem;
   }
 
   .table-col-amount {
-    width: 10rem;
-    text-align: right;
+    width: 10.75rem;
   }
 
   .table-col-payment {
-    width: 11.25rem;
-    text-align: left;
+    width: 9.75rem;
   }
 
   .table-col-date {
-    width: 8rem;
+    width: 8.75rem;
+  }
+
+  .data-table td.table-col-status,
+  .data-table td.table-col-select,
+  .data-table td.table-col-link,
+  .data-table td.table-col-actions,
+  .data-table td.table-col-qty,
+  .data-table td.table-col-date,
+  .data-table th.table-col-status,
+  .data-table th.table-col-select,
+  .data-table th.table-col-link,
+  .data-table th.table-col-actions,
+  .data-table th.table-col-qty,
+  .data-table th.table-col-date,
+  .data-table th.table-col-payment,
+  .data-table td.table-col-payment {
     text-align: center;
   }
 
-  .table-actions {
-    @apply flex items-center justify-center gap-1.5;
-    flex-wrap: nowrap;
+  .data-table th.table-col-amount,
+  .data-table td.table-col-amount {
+    text-align: right;
+  }
+
+  .data-table td.table-col-status,
+  .data-table td.table-col-select,
+  .data-table td.table-col-link,
+  .data-table td.table-col-actions,
+  .data-table td.table-col-qty,
+  .data-table td.table-col-date {
+    white-space: nowrap;
+  }
+
+  .data-table td.table-col-link .planner-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
   }
 
   .planner-dialog {
@@ -273,10 +365,67 @@ textarea {
     border-radius: var(--radius-pill);
   }
 
-  .table-action-button {
-    min-width: 3.625rem;
-    justify-content: center;
-    white-space: nowrap;
+  .entry-grid-shell {
+    box-shadow: 0 18px 36px -34px rgba(15, 23, 42, 0.2);
+  }
+
+  .entry-grid-table {
+    table-layout: fixed;
+  }
+
+  .entry-grid-table thead {
+    background: color-mix(in srgb, var(--surface-muted) 76%, white);
+  }
+
+  .entry-grid-table th {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.75rem;
+    letter-spacing: -0.01em;
+  }
+
+  .entry-grid-table td {
+    padding: 0.5rem 0.625rem;
+    vertical-align: middle;
+  }
+
+  .entry-grid-table th:first-child,
+  .entry-grid-table td:first-child {
+    padding-left: 0.875rem;
+  }
+
+  .entry-grid-table th:last-child,
+  .entry-grid-table td:last-child {
+    padding-right: 0.875rem;
+  }
+
+  .entry-grid-table tbody td {
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, white);
+  }
+
+  .entry-grid-table tbody tr:hover td {
+    background: var(--surface);
+  }
+
+  .entry-grid-control {
+    height: 2.375rem;
+    min-height: 2.375rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+
+  .entry-grid-select {
+    padding-right: 2.5rem;
+  }
+
+  .entry-grid-error td {
+    padding-top: 0.125rem;
+    padding-bottom: 0.625rem;
+    background: color-mix(in srgb, var(--danger) 4%, white);
+    color: var(--danger);
+    font-size: 0.8125rem;
+    line-height: 1.45;
   }
 }
 

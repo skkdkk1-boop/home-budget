@@ -85,3 +85,24 @@ export function HammerIcon(props: IconProps) {
     </PlannerIcon>
   );
 }
+
+export function BoxesIcon(props: IconProps) {
+  return (
+    <PlannerIcon {...props}>
+      <path d="M12 3.8 5 7.3v9.4l7 3.5 7-3.5V7.3z" />
+      <path d="M5 7.3 12 11l7-3.7" />
+      <path d="M12 11v9.2" />
+      <path d="M8.3 5.7 15.2 9" />
+    </PlannerIcon>
+  );
+}
+
+export function MoreHorizontalIcon(props: IconProps) {
+  return (
+    <PlannerIcon {...props}>
+      <circle cx="6.5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="17.5" cy="12" r="1" />
+    </PlannerIcon>
+  );
+}

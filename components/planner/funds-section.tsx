@@ -9,16 +9,20 @@ import { compareRecent, formatCurrency, formatDate } from "@/lib/planner-utils";
 import { usePlannerData } from "./planner-provider";
 import {
   Button,
+  DialogActions,
   EmptyState,
   Field,
   FormDialog,
   LoadingState,
+  RowActionMenu,
   SelectInput,
   SectionHeader,
   StatusBadge,
   SummaryCard,
   SurfaceCard,
+  TableContainer,
   TextInput,
+  ValuePreviewPanel,
 } from "./ui";
 
 const emptyFundForm: FundFormValues = {
@@ -95,33 +99,26 @@ export function FundsSection() {
 
   return (
     <div className="page-shell">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <SummaryCard
           label="등록 자금 수"
           value={`${data.funds.length}개`}
-          description="현금, 투자 자산, 예비 자금까지 함께 기록"
         />
         <SummaryCard
           label="총 자금"
           value={formatCurrency(summary.totalFunds)}
-          description="모든 자금 항목을 합산한 금액"
         />
         <SummaryCard
           label="사용 가능 자금"
           value={formatCurrency(summary.usableFunds)}
-          description="실제 남은 자금 계산에 반영되는 금액"
           tone="highlight"
         />
       </div>
 
       <SurfaceCard>
-        <SectionHeader
-          title="자금 목록"
-          description="사용 가능한 자금만 따로 체크하면, 대시보드의 실제 남은 자금이 더 정확해져요."
-          action={<Button onClick={startCreate}>자금 추가</Button>}
-        />
+        <SectionHeader action={<Button onClick={startCreate}>자금 추가</Button>} />
 
-        <div className="mt-5">
+        <div className="mt-4">
           {sortedFunds.length === 0 ? (
             <EmptyState
               title="등록된 자금이 없어요"
@@ -130,7 +127,7 @@ export function FundsSection() {
           ) : (
             <>
               <div className="hidden md:block">
-                <div className="table-shell">
+                <TableContainer>
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -138,18 +135,18 @@ export function FundsSection() {
                         <th className="table-col-amount">금액</th>
                         <th className="table-col-status">사용 여부</th>
                         <th className="table-col-date">최근 수정</th>
-                        <th className="table-col-actions">관리</th>
+                        <th className="table-col-actions">
+                          <span className="sr-only">행 동작</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedFunds.map((fund) => (
                         <tr key={fund.id}>
                           <td className="table-col-left">
-                            <p className="font-semibold text-[var(--text-primary)]">
-                              {fund.name}
-                            </p>
+                            <p className="table-cell-title">{fund.name}</p>
                           </td>
-                          <td className="table-col-amount text-base font-semibold text-[var(--text-primary)]">
+                          <td className="table-col-amount numeric-value text-base font-semibold text-[var(--text-primary)]">
                             {formatCurrency(fund.amount)}
                           </td>
                           <td className="table-col-status">
@@ -163,74 +160,61 @@ export function FundsSection() {
                             {formatDate(fund.updatedAt.slice(0, 10))}
                           </td>
                           <td className="table-col-actions">
-                            <div className="table-actions">
-                              <Button
-                                className="table-action-button"
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => startEdit(fund)}
-                              >
-                                수정
-                              </Button>
-                              <Button
-                                className="table-action-button"
-                                size="sm"
-                                variant="danger"
-                                onClick={() => requestDelete(fund)}
-                              >
-                                삭제
-                              </Button>
+                            <div className="table-action-slot">
+                              <RowActionMenu
+                                description={
+                                  fund.isUsable ? "사용 가능 자금" : "참고용 자금"
+                                }
+                                label={fund.name}
+                                mode="desktop"
+                                onDelete={() => requestDelete(fund)}
+                                onEdit={() => startEdit(fund)}
+                              />
                             </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableContainer>
               </div>
 
               <div className="grid gap-3 md:hidden">
                 {sortedFunds.map((fund) => (
                   <article
                     key={fund.id}
-                    className="planner-mobile-card p-4"
+                    className="planner-mobile-card relative p-4 sm:p-5"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-base font-semibold text-[var(--text-primary)]">
-                          {fund.name}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
-                          {formatCurrency(fund.amount)}
-                        </p>
+                    <div className="pr-12">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="table-cell-title text-base">
+                            {fund.name}
+                          </p>
+                          <p className="numeric-value mt-2 text-[1.625rem] font-semibold tracking-[-0.04em] text-[var(--text-primary)] sm:text-[1.75rem]">
+                            {formatCurrency(fund.amount)}
+                          </p>
+                        </div>
+                        <StatusBadge tone={fund.isUsable ? "success" : "neutral"}>
+                          {fund.isUsable ? "사용 가능" : "참고용"}
+                        </StatusBadge>
                       </div>
-                      <StatusBadge tone={fund.isUsable ? "success" : "neutral"}>
-                        {fund.isUsable ? "사용 가능" : "참고용"}
-                      </StatusBadge>
+
+                      <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                        최근 수정 {formatDate(fund.updatedAt.slice(0, 10))}
+                      </p>
                     </div>
 
-                    <p className="mt-3 text-sm text-[var(--text-secondary)]">
-                      최근 수정 {formatDate(fund.updatedAt.slice(0, 10))}
-                    </p>
-
-                    <div className="mt-4 flex gap-2">
-                      <Button
-                        className="table-action-button flex-1"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => startEdit(fund)}
-                      >
-                        수정
-                      </Button>
-                      <Button
-                        className="table-action-button flex-1"
-                        size="sm"
-                        variant="danger"
-                        onClick={() => requestDelete(fund)}
-                      >
-                        삭제
-                      </Button>
-                    </div>
+                    <RowActionMenu
+                      description={
+                        fund.isUsable ? "사용 가능 자금" : "참고용 자금"
+                      }
+                      label={fund.name}
+                      mode="mobile"
+                      onDelete={() => requestDelete(fund)}
+                      onEdit={() => startEdit(fund)}
+                      triggerClassName="absolute right-4 top-4"
+                    />
                   </article>
                 ))}
               </div>
@@ -294,24 +278,20 @@ export function FundsSection() {
             </SelectInput>
           </Field>
 
-          <div className="planner-panel-muted p-4">
-            <p className="text-sm text-[var(--text-secondary)]">미리보기</p>
-            <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
-              {formatCurrency(form.amount)}
-            </p>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              {form.isUsable
+          <ValuePreviewPanel
+            caption={
+              form.isUsable
                 ? "실제 남은 자금 계산에 포함돼요."
-                : "총 자금에는 포함되지만 사용 가능 자금에는 제외돼요."}
-            </p>
-          </div>
+                : "총 자금에는 포함되지만 사용 가능 자금에는 제외돼요."
+            }
+            label="미리보기"
+            value={formatCurrency(form.amount)}
+          />
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>
-              취소
-            </Button>
-            <Button type="submit">{editingFund ? "수정 저장" : "자금 추가"}</Button>
-          </div>
+          <DialogActions
+            onCancel={() => setIsDialogOpen(false)}
+            submitLabel={editingFund ? "수정 저장" : "자금 추가"}
+          />
         </form>
       </FormDialog>
     </div>

@@ -7,6 +7,15 @@ export const ROOM_OPTIONS = [
   "다용도실",
 ] as const;
 
+export const SELL_LOCATION_OPTIONS = [
+  "거실",
+  "주방",
+  "안방",
+  "작은방",
+  "안방베란다",
+  "작은방베란다",
+] as const;
+
 export const PURCHASE_CATEGORY_OPTIONS = [
   "가전",
   "가구",
@@ -16,7 +25,7 @@ export const PURCHASE_CATEGORY_OPTIONS = [
   "기타",
 ] as const;
 
-export const PURCHASE_STATUS_OPTIONS = ["planned", "completed"] as const;
+export const PURCHASE_STATUS_OPTIONS = ["planned", "completed", "shipping"] as const;
 export const PAYMENT_TYPE_OPTIONS = ["lump", "installment"] as const;
 export const SHIPPING_STATUS_OPTIONS = [
   "beforeOrder",
@@ -29,17 +38,41 @@ export const CONSTRUCTION_STATUS_OPTIONS = [
   "scheduled",
   "done",
 ] as const;
+export const SELL_ITEM_STATUS_OPTIONS = [
+  "planned",
+  "selling",
+  "reserved",
+  "completed",
+] as const;
+export const DISPOSAL_STATUS_OPTIONS = [
+  "planned",
+  "needsMethod",
+  "reserved",
+  "completed",
+] as const;
+export const MOVE_ITEM_STATUS_OPTIONS = [
+  "before",
+  "sorted",
+  "planned",
+  "completed",
+] as const;
 
 export type Room = (typeof ROOM_OPTIONS)[number];
+export type SellLocation = (typeof SELL_LOCATION_OPTIONS)[number];
 export type PurchaseCategory = (typeof PURCHASE_CATEGORY_OPTIONS)[number];
 export type PurchaseStatus = (typeof PURCHASE_STATUS_OPTIONS)[number];
 export type PaymentType = (typeof PAYMENT_TYPE_OPTIONS)[number];
 export type ShippingStatus = (typeof SHIPPING_STATUS_OPTIONS)[number];
 export type ConstructionStatus = (typeof CONSTRUCTION_STATUS_OPTIONS)[number];
+export type SellItemStatus = (typeof SELL_ITEM_STATUS_OPTIONS)[number];
+export type DisposalStatus = (typeof DISPOSAL_STATUS_OPTIONS)[number];
+export type MoveItemStatus = (typeof MOVE_ITEM_STATUS_OPTIONS)[number];
+export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
   planned: "구매 예정",
   completed: "구매 완료",
+  shipping: "배송 중",
 };
 
 export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
@@ -58,6 +91,70 @@ export const CONSTRUCTION_STATUS_LABELS: Record<ConstructionStatus, string> = {
   before: "진행 전",
   scheduled: "일정 확정",
   done: "완료",
+};
+
+export const SELL_ITEM_STATUS_LABELS: Record<SellItemStatus, string> = {
+  planned: "판매 예정",
+  selling: "판매 중",
+  reserved: "예약됨",
+  completed: "판매 완료",
+};
+
+export const DISPOSAL_STATUS_LABELS: Record<DisposalStatus, string> = {
+  planned: "폐기 예정",
+  needsMethod: "방법 확인 필요",
+  reserved: "예약 완료",
+  completed: "폐기 완료",
+};
+
+export const MOVE_ITEM_STATUS_LABELS: Record<MoveItemStatus, string> = {
+  before: "정리 전",
+  sorted: "분류 완료",
+  planned: "이동 예정",
+  completed: "이동 완료",
+};
+
+export const PURCHASE_STATUS_TONES: Record<PurchaseStatus, StatusTone> = {
+  planned: "warning",
+  completed: "success",
+  shipping: "info",
+};
+
+export const SHIPPING_STATUS_TONES: Record<ShippingStatus, StatusTone> = {
+  beforeOrder: "neutral",
+  ordered: "info",
+  shipping: "warning",
+  delivered: "success",
+};
+
+export const CONSTRUCTION_STATUS_TONES: Record<
+  ConstructionStatus,
+  StatusTone
+> = {
+  before: "neutral",
+  scheduled: "info",
+  done: "success",
+};
+
+export const SELL_ITEM_STATUS_TONES: Record<SellItemStatus, StatusTone> = {
+  planned: "neutral",
+  selling: "info",
+  reserved: "warning",
+  completed: "success",
+};
+
+export const DISPOSAL_STATUS_TONES: Record<DisposalStatus, StatusTone> = {
+  planned: "neutral",
+  needsMethod: "warning",
+  reserved: "info",
+  completed: "success",
+};
+
+export const MOVE_ITEM_STATUS_TONES: Record<MoveItemStatus, StatusTone> = {
+  before: "neutral",
+  sorted: "info",
+  planned: "warning",
+  completed: "success",
 };
 
 export interface BaseEntity {
@@ -83,6 +180,7 @@ export interface Purchase extends BaseEntity {
   paymentType: PaymentType;
   installmentMonths: number;
   monthlyPayment: number;
+  scheduleDate: string;
   link: string;
   note: string;
 }
@@ -106,11 +204,44 @@ export interface Construction extends BaseEntity {
   note: string;
 }
 
+export interface SellItem extends BaseEntity {
+  name: string;
+  currentLocation: SellLocation;
+  askingPrice: number;
+  minimumPrice: number;
+  sellByDate: string;
+  status: SellItemStatus;
+  platform: string;
+  note: string;
+}
+
+export interface DisposalItem extends BaseEntity {
+  name: string;
+  currentLocation: SellLocation;
+  disposalMethod: string;
+  reservationRequired: boolean;
+  disposalCost: number;
+  disposalDate: string;
+  status: DisposalStatus;
+  note: string;
+}
+
+export interface MoveItem extends BaseEntity {
+  name: string;
+  currentLocation: SellLocation;
+  targetLocation: SellLocation;
+  status: MoveItemStatus;
+  note: string;
+}
+
 export interface PlannerData {
   funds: Fund[];
   purchases: Purchase[];
   shippings: Shipping[];
   constructions: Construction[];
+  sellItems: SellItem[];
+  disposalItems: DisposalItem[];
+  moveItems: MoveItem[];
 }
 
 export interface DashboardSummary {
@@ -140,6 +271,7 @@ export interface PurchaseFormValues {
   quantity: number;
   paymentType: PaymentType;
   installmentMonths: number;
+  scheduleDate: string;
   link: string;
   note: string;
 }
@@ -163,4 +295,37 @@ export interface ConstructionFormValues {
   note: string;
 }
 
+export interface SellItemFormValues {
+  name: string;
+  currentLocation: SellLocation;
+  askingPrice: number;
+  minimumPrice: number;
+  sellByDate: string;
+  status: SellItemStatus;
+  platform: string;
+  note: string;
+}
+
+export interface DisposalItemFormValues {
+  name: string;
+  currentLocation: SellLocation;
+  disposalMethod: string;
+  reservationRequired: boolean;
+  disposalCost: number;
+  disposalDate: string;
+  status: DisposalStatus;
+  note: string;
+}
+
+export interface MoveItemFormValues {
+  name: string;
+  currentLocation: SellLocation;
+  targetLocation: SellLocation;
+  status: MoveItemStatus;
+  note: string;
+}
+
 export type PurchaseSortOption = "recent" | "priceHigh" | "priceLow";
+export type SellItemSortOption = "recent" | "deadline" | "priceHigh" | "priceLow";
+export type DisposalItemSortOption = "recent" | "deadline" | "costHigh" | "costLow";
+export type MoveItemSortOption = "recent" | "currentLocation" | "targetLocation";
