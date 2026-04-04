@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import {
   createPlannerShareSnapshot,
@@ -12,6 +13,8 @@ import { usePlannerData } from "./planner-provider";
 import { Button, FormDialog, SummaryChip, TextInput } from "./ui";
 
 export function ShareLinkButton() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isReady: isAuthReady, user } = usePlannerAuth();
   const { data, isReady: isPlannerReady } = usePlannerData();
   const [open, setOpen] = useState(false);
@@ -46,7 +49,14 @@ export function ShareLinkButton() {
         throw new Error("공유 링크를 만들지 못했어요.");
       }
 
-      setShareUrl(`${window.location.origin}/share/${result.data.id}`);
+      const sharePath = pathname === "/" ? "" : pathname;
+      const queryString = searchParams.toString();
+
+      setShareUrl(
+        `${window.location.origin}/share/${result.data.id}${sharePath}${
+          queryString ? `?${queryString}` : ""
+        }`,
+      );
     } catch (error) {
       console.error(error);
 
@@ -89,7 +99,7 @@ export function ShareLinkButton() {
       <FormDialog
         open={open}
         title="읽기 전용 공유 링크"
-        description="현재 화면의 데이터를 읽기 전용 스냅샷으로 만들어 다른 사람에게 보낼 수 있어요."
+        description="현재 보고 있는 페이지와 탭, 필터 상태를 읽기 전용 스냅샷으로 만들어 다른 사람에게 보낼 수 있어요."
         onClose={resetDialog}
         mobilePosition="center"
         panelClassName="max-w-xl"

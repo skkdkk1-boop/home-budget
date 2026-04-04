@@ -62,6 +62,7 @@ export function ShippingSection() {
   const {
     data,
     isReady,
+    isReadOnly,
     addPurchase,
     updatePurchase,
   } = usePlannerData();
@@ -302,9 +303,11 @@ export function ShippingSection() {
       </div>
 
       <SurfaceCard>
-        <SectionHeader action={<Button onClick={startCreate}>배송 항목 추가</Button>} />
+        <SectionHeader
+          action={!isReadOnly ? <Button onClick={startCreate}>배송 항목 추가</Button> : undefined}
+        />
 
-        {selectedShippingIds.length > 0 ? (
+        {!isReadOnly && selectedShippingIds.length > 0 ? (
           <div className="mt-4">
             <BulkActionBar
               count={selectedShippingIds.length}
@@ -330,24 +333,28 @@ export function ShippingSection() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th className="table-col-select">
-                          <div className="table-action-slot">
-                            <SelectionCheckbox
-                              aria-label="현재 목록 전체 선택"
-                              checked={isAllVisibleSelected}
-                              indeterminate={isSomeVisibleSelected}
-                              onChange={() => toggleSelectAllShippings()}
-                            />
-                          </div>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-select">
+                            <div className="table-action-slot">
+                              <SelectionCheckbox
+                                aria-label="현재 목록 전체 선택"
+                                checked={isAllVisibleSelected}
+                                indeterminate={isSomeVisibleSelected}
+                                onChange={() => toggleSelectAllShippings()}
+                              />
+                            </div>
+                          </th>
+                        ) : null}
                         <th className="table-col-status">상태</th>
                         <th className="table-col-left">품목</th>
                         <th className="table-col-left">공간</th>
                         <th className="table-col-date">배송일</th>
                         <th className="table-col-left">메모</th>
-                        <th className="table-col-actions">
-                          <span className="sr-only">행 동작</span>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-actions">
+                            <span className="sr-only">행 동작</span>
+                          </th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -356,15 +363,17 @@ export function ShippingSection() {
 
                         return (
                           <tr key={shipping.id}>
-                            <td className="table-col-select">
-                              <div className="table-action-slot">
-                                <SelectionCheckbox
-                                  aria-label={`${shipping.itemName} 선택`}
-                                  checked={selectedShippingIds.includes(shipping.id)}
-                                  onChange={() => toggleShippingSelection(shipping.id)}
-                                />
-                              </div>
-                            </td>
+                            {!isReadOnly ? (
+                              <td className="table-col-select">
+                                <div className="table-action-slot">
+                                  <SelectionCheckbox
+                                    aria-label={`${shipping.itemName} 선택`}
+                                    checked={selectedShippingIds.includes(shipping.id)}
+                                    onChange={() => toggleShippingSelection(shipping.id)}
+                                  />
+                                </div>
+                              </td>
+                            ) : null}
                             <td className="table-col-status">
                               <StatusBadge tone={deliveryMeta.tone}>
                                 {deliveryMeta.label}
@@ -388,17 +397,19 @@ export function ShippingSection() {
                                 "-"
                               )}
                             </td>
-                            <td className="table-col-actions">
-                              <div className="table-action-slot">
-                                <RowActionMenu
-                                  description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
-                                  label={shipping.itemName}
-                                  mode="desktop"
-                                  onDelete={() => requestDelete(shipping)}
-                                  onEdit={() => startEdit(shipping)}
-                                />
-                              </div>
-                            </td>
+                            {!isReadOnly ? (
+                              <td className="table-col-actions">
+                                <div className="table-action-slot">
+                                  <RowActionMenu
+                                    description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
+                                    label={shipping.itemName}
+                                    mode="desktop"
+                                    onDelete={() => requestDelete(shipping)}
+                                    onEdit={() => startEdit(shipping)}
+                                  />
+                                </div>
+                              </td>
+                            ) : null}
                           </tr>
                         );
                       })}
@@ -416,15 +427,17 @@ export function ShippingSection() {
                       key={shipping.id}
                       className="planner-mobile-card relative p-4 sm:p-5"
                     >
-                      <div className="absolute left-4 top-4 z-10">
-                        <SelectionCheckbox
-                          aria-label={`${shipping.itemName} 선택`}
-                          checked={selectedShippingIds.includes(shipping.id)}
-                          onChange={() => toggleShippingSelection(shipping.id)}
-                        />
-                      </div>
+                      {!isReadOnly ? (
+                        <div className="absolute left-4 top-4 z-10">
+                          <SelectionCheckbox
+                            aria-label={`${shipping.itemName} 선택`}
+                            checked={selectedShippingIds.includes(shipping.id)}
+                            onChange={() => toggleShippingSelection(shipping.id)}
+                          />
+                        </div>
+                      ) : null}
 
-                      <div className="pl-8 pr-12">
+                      <div className={isReadOnly ? "pr-4" : "pl-8 pr-12"}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -455,14 +468,16 @@ export function ShippingSection() {
                         </div>
                       </div>
 
-                      <RowActionMenu
-                        description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
-                        label={shipping.itemName}
-                        mode="mobile"
-                        onDelete={() => requestDelete(shipping)}
-                        onEdit={() => startEdit(shipping)}
-                        triggerClassName="absolute right-4 top-4"
-                      />
+                      {!isReadOnly ? (
+                        <RowActionMenu
+                          description={`${shipping.room} · ${formatDate(shipping.deliveryDate)}`}
+                          label={shipping.itemName}
+                          mode="mobile"
+                          onDelete={() => requestDelete(shipping)}
+                          onEdit={() => startEdit(shipping)}
+                          triggerClassName="absolute right-4 top-4"
+                        />
+                      ) : null}
                     </article>
                   );
                 })}
@@ -472,12 +487,13 @@ export function ShippingSection() {
         </div>
       </SurfaceCard>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingShipping ? "배송 항목 수정" : "배송 항목 추가"}
-        description="배송이 필요한 품목만 날짜를 남기면 다른 배송 정보 없이도 일정 관리에 바로 쓸 수 있어요."
-        onClose={() => setIsDialogOpen(false)}
-      >
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingShipping ? "배송 항목 수정" : "배송 항목 추가"}
+          description="배송이 필요한 품목만 날짜를 남기면 다른 배송 정보 없이도 일정 관리에 바로 쓸 수 있어요."
+          onClose={() => setIsDialogOpen(false)}
+        >
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <Field label="품목 이름">
             <TextInput
@@ -545,7 +561,8 @@ export function ShippingSection() {
             submitLabel={editingShipping ? "수정 저장" : "배송 항목 추가"}
           />
         </form>
-      </FormDialog>
+        </FormDialog>
+      ) : null}
     </div>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from "@/lib/planner-utils";
 
 import { usePlannerData } from "./planner-provider";
+import { usePlannerQueryState } from "./use-planner-query-state";
 import {
   BulkActionBar,
   Button,
@@ -225,6 +226,7 @@ export function MovingSalesSection() {
   const {
     data,
     isReady,
+    isReadOnly,
     addSellItem,
     addSellItems,
     updateSellItem,
@@ -232,13 +234,25 @@ export function MovingSalesSection() {
     deleteSellItem,
     deleteSellItems,
   } = usePlannerData();
+  const { getValue, setValues } = usePlannerQueryState();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SellItem | null>(null);
   const [inputMode, setInputMode] = useState<SellInputMode>("single");
-  const [locationFilter, setLocationFilter] = useState<SellLocation | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<SellItemStatus | "all">("all");
-  const [sortBy, setSortBy] = useState<SellItemSortOption>("recent");
+  const locationFilter = getValue<SellLocation | "all">("sellLocation", "all", [
+    ...SELL_LOCATION_OPTIONS,
+    "all",
+  ]);
+  const statusFilter = getValue<SellItemStatus | "all">("sellStatus", "all", [
+    ...SELL_ITEM_STATUS_OPTIONS,
+    "all",
+  ]);
+  const sortBy = getValue<SellItemSortOption>("sellSort", "recent", [
+    "recent",
+    "deadline",
+    "priceHigh",
+    "priceLow",
+  ]);
   const [selectedSellIds, setSelectedSellIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<SellItemStatus>("planned");
   const [form, setForm] = useState<SellItemFormState>(createEmptySellItemForm);
@@ -564,14 +578,19 @@ export function MovingSalesSection() {
 
   return (
     <>
-      <SectionHeader action={<Button onClick={startCreate}>판매 항목 추가</Button>} />
+      <SectionHeader
+        action={!isReadOnly ? <Button onClick={startCreate}>판매 항목 추가</Button> : undefined}
+      />
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))] lg:items-end">
         <Field label="현재 위치">
           <SelectInput
             value={locationFilter}
             onChange={(event) =>
-              setLocationFilter(event.target.value as SellLocation | "all")
+              setValues(
+                { sellLocation: event.target.value as SellLocation | "all" },
+                { sellLocation: "all" },
+              )
             }
           >
             <option value="all">전체 위치</option>
@@ -587,7 +606,10 @@ export function MovingSalesSection() {
           <SelectInput
             value={statusFilter}
             onChange={(event) =>
-              setStatusFilter(event.target.value as SellItemStatus | "all")
+              setValues(
+                { sellStatus: event.target.value as SellItemStatus | "all" },
+                { sellStatus: "all" },
+              )
             }
           >
             <option value="all">전체 상태</option>
@@ -602,7 +624,12 @@ export function MovingSalesSection() {
         <Field label="정렬">
           <SelectInput
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as SellItemSortOption)}
+            onChange={(event) =>
+              setValues(
+                { sellSort: event.target.value as SellItemSortOption },
+                { sellSort: "recent" },
+              )
+            }
           >
             <option value="recent">최근 등록순</option>
             <option value="deadline">마감일순</option>
@@ -612,7 +639,7 @@ export function MovingSalesSection() {
         </Field>
       </div>
 
-      {selectedSellIds.length > 0 ? (
+      {!isReadOnly && selectedSellIds.length > 0 ? (
         <div className="mt-4">
           <BulkActionBar count={selectedSellIds.length} onClear={clearSellSelection}>
             <SelectInput
@@ -642,7 +669,11 @@ export function MovingSalesSection() {
         {filteredSellItems.length === 0 ? (
           <EmptyState
             title="조건에 맞는 판매 항목이 없어요"
-            description="판매할 품목을 추가하거나 필터를 조정해보세요."
+            description={
+              isReadOnly
+                ? "필터를 조정해보세요."
+                : "판매할 품목을 추가하거나 필터를 조정해보세요."
+            }
           />
         ) : (
           <>
@@ -651,16 +682,18 @@ export function MovingSalesSection() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th className="table-col-select">
-                        <div className="table-action-slot">
-                          <SelectionCheckbox
-                            aria-label="현재 목록 전체 선택"
-                            checked={isAllVisibleSelected}
-                            indeterminate={isSomeVisibleSelected}
-                            onChange={() => toggleSelectAllSells()}
-                          />
-                        </div>
-                      </th>
+                      {!isReadOnly ? (
+                        <th className="table-col-select">
+                          <div className="table-action-slot">
+                            <SelectionCheckbox
+                              aria-label="현재 목록 전체 선택"
+                              checked={isAllVisibleSelected}
+                              indeterminate={isSomeVisibleSelected}
+                              onChange={() => toggleSelectAllSells()}
+                            />
+                          </div>
+                        </th>
+                      ) : null}
                       <th className="table-col-status">상태</th>
                       <th className="table-col-left">품목명</th>
                       <th className="table-col-left">현재 위치</th>
@@ -669,23 +702,27 @@ export function MovingSalesSection() {
                       <th className="table-col-date">판매 마감일</th>
                       <th className="table-col-left">플랫폼</th>
                       <th className="table-col-left">메모</th>
-                      <th className="table-col-actions">
-                        <span className="sr-only">행 동작</span>
-                      </th>
+                      {!isReadOnly ? (
+                        <th className="table-col-actions">
+                          <span className="sr-only">행 동작</span>
+                        </th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSellItems.map((item) => (
                       <tr key={item.id}>
-                        <td className="table-col-select">
-                          <div className="table-action-slot">
-                            <SelectionCheckbox
-                              aria-label={`${item.name} 선택`}
-                              checked={selectedSellIds.includes(item.id)}
-                              onChange={() => toggleSellSelection(item.id)}
-                            />
-                          </div>
-                        </td>
+                        {!isReadOnly ? (
+                          <td className="table-col-select">
+                            <div className="table-action-slot">
+                              <SelectionCheckbox
+                                aria-label={`${item.name} 선택`}
+                                checked={selectedSellIds.includes(item.id)}
+                                onChange={() => toggleSellSelection(item.id)}
+                              />
+                            </div>
+                          </td>
+                        ) : null}
                         <td className="table-col-status">
                           <StatusBadge tone={SELL_ITEM_STATUS_TONES[item.status]}>
                             {SELL_ITEM_STATUS_LABELS[item.status]}
@@ -716,17 +753,19 @@ export function MovingSalesSection() {
                             "-"
                           )}
                         </td>
-                        <td className="table-col-actions">
-                          <div className="table-action-slot">
-                            <RowActionMenu
-                              description={`${item.currentLocation} · ${SELL_ITEM_STATUS_LABELS[item.status]}`}
-                              label={item.name}
-                              mode="desktop"
-                              onDelete={() => requestDelete(item)}
-                              onEdit={() => startEdit(item)}
-                            />
-                          </div>
-                        </td>
+                        {!isReadOnly ? (
+                          <td className="table-col-actions">
+                            <div className="table-action-slot">
+                              <RowActionMenu
+                                description={`${item.currentLocation} · ${SELL_ITEM_STATUS_LABELS[item.status]}`}
+                                label={item.name}
+                                mode="desktop"
+                                onDelete={() => requestDelete(item)}
+                                onEdit={() => startEdit(item)}
+                              />
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -740,15 +779,17 @@ export function MovingSalesSection() {
                   key={item.id}
                   className="planner-mobile-card relative p-4 sm:p-5"
                 >
-                  <div className="absolute left-4 top-4 z-10">
-                    <SelectionCheckbox
-                      aria-label={`${item.name} 선택`}
-                      checked={selectedSellIds.includes(item.id)}
-                      onChange={() => toggleSellSelection(item.id)}
-                    />
-                  </div>
+                  {!isReadOnly ? (
+                    <div className="absolute left-4 top-4 z-10">
+                      <SelectionCheckbox
+                        aria-label={`${item.name} 선택`}
+                        checked={selectedSellIds.includes(item.id)}
+                        onChange={() => toggleSellSelection(item.id)}
+                      />
+                    </div>
+                  ) : null}
 
-                  <div className="pl-8 pr-12">
+                  <div className={isReadOnly ? "pr-4" : "pl-8 pr-12"}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -780,14 +821,16 @@ export function MovingSalesSection() {
                     </div>
                   </div>
 
-                  <RowActionMenu
-                    description={`${item.currentLocation} · ${SELL_ITEM_STATUS_LABELS[item.status]}`}
-                    label={item.name}
-                    mode="mobile"
-                    onDelete={() => requestDelete(item)}
-                    onEdit={() => startEdit(item)}
-                    triggerClassName="absolute right-4 top-4"
-                  />
+                  {!isReadOnly ? (
+                    <RowActionMenu
+                      description={`${item.currentLocation} · ${SELL_ITEM_STATUS_LABELS[item.status]}`}
+                      label={item.name}
+                      mode="mobile"
+                      onDelete={() => requestDelete(item)}
+                      onEdit={() => startEdit(item)}
+                      triggerClassName="absolute right-4 top-4"
+                    />
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -795,14 +838,15 @@ export function MovingSalesSection() {
         )}
       </div>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingItem ? "판매 항목 수정" : "판매 항목 추가"}
-        description="품목 정보와 희망 가격, 판매 마감일을 함께 적어두면 이사 정리가 훨씬 쉬워져요."
-        onClose={handleCloseDialog}
-        panelClassName={inputMode === "multi" && !editingItem ? "!max-w-[72rem]" : undefined}
-        bodyClassName={inputMode === "multi" && !editingItem ? "px-4 py-4 sm:px-5" : undefined}
-      >
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingItem ? "판매 항목 수정" : "판매 항목 추가"}
+          description="품목 정보와 희망 가격, 판매 마감일을 함께 적어두면 이사 정리가 훨씬 쉬워져요."
+          onClose={handleCloseDialog}
+          panelClassName={inputMode === "multi" && !editingItem ? "!max-w-[72rem]" : undefined}
+          bodyClassName={inputMode === "multi" && !editingItem ? "px-4 py-4 sm:px-5" : undefined}
+        >
         <form className="grid gap-4" onSubmit={handleSubmit}>
           {!editingItem ? (
             <SegmentedControl>
@@ -1225,7 +1269,8 @@ export function MovingSalesSection() {
             }
           />
         </form>
-      </FormDialog>
+        </FormDialog>
+      ) : null}
     </>
   );
 }

@@ -24,6 +24,7 @@ import {
 } from "@/lib/planner-utils";
 
 import { usePlannerData } from "./planner-provider";
+import { usePlannerQueryState } from "./use-planner-query-state";
 import {
   BulkActionBar,
   Button,
@@ -57,14 +58,25 @@ function compareLocation(left: string, right: string) {
 }
 
 export function MovingTransferSection() {
-  const { data, addMoveItem, updateMoveItem, deleteMoveItem, deleteMoveItems } =
+  const { data, isReadOnly, addMoveItem, updateMoveItem, deleteMoveItem, deleteMoveItems } =
     usePlannerData();
+  const { getValue, setValues } = usePlannerQueryState();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MoveItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [locationFilter, setLocationFilter] = useState<SellLocation | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<MoveItemStatus | "all">("all");
-  const [sortBy, setSortBy] = useState<MoveItemSortOption>("recent");
+  const locationFilter = getValue<SellLocation | "all">("moveLocation", "all", [
+    ...SELL_LOCATION_OPTIONS,
+    "all",
+  ]);
+  const statusFilter = getValue<MoveItemStatus | "all">("moveStatus", "all", [
+    ...MOVE_ITEM_STATUS_OPTIONS,
+    "all",
+  ]);
+  const sortBy = getValue<MoveItemSortOption>("moveSort", "recent", [
+    "recent",
+    "currentLocation",
+    "targetLocation",
+  ]);
   const [form, setForm] = useState<MoveItemFormValues>(createEmptyMoveForm);
 
   const filteredItems = useMemo(() => {
@@ -182,9 +194,11 @@ export function MovingTransferSection() {
 
   return (
     <>
-      <SectionHeader action={<Button onClick={startCreate}>이동 항목 추가</Button>} />
+      <SectionHeader
+        action={!isReadOnly ? <Button onClick={startCreate}>이동 항목 추가</Button> : undefined}
+      />
 
-      {selectedIds.length > 0 ? (
+      {!isReadOnly && selectedIds.length > 0 ? (
         <div className="mt-4">
           <BulkActionBar count={selectedIds.length} onClear={clearSelection}>
             <Button size="sm" variant="danger" onClick={handleBulkDelete}>
@@ -199,7 +213,10 @@ export function MovingTransferSection() {
           <SelectInput
             value={locationFilter}
             onChange={(event) =>
-              setLocationFilter(event.target.value as SellLocation | "all")
+              setValues(
+                { moveLocation: event.target.value as SellLocation | "all" },
+                { moveLocation: "all" },
+              )
             }
           >
             <option value="all">전체 위치</option>
@@ -215,7 +232,10 @@ export function MovingTransferSection() {
           <SelectInput
             value={statusFilter}
             onChange={(event) =>
-              setStatusFilter(event.target.value as MoveItemStatus | "all")
+              setValues(
+                { moveStatus: event.target.value as MoveItemStatus | "all" },
+                { moveStatus: "all" },
+              )
             }
           >
             <option value="all">전체 상태</option>
@@ -230,7 +250,12 @@ export function MovingTransferSection() {
         <Field label="정렬">
           <SelectInput
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as MoveItemSortOption)}
+            onChange={(event) =>
+              setValues(
+                { moveSort: event.target.value as MoveItemSortOption },
+                { moveSort: "recent" },
+              )
+            }
           >
             <option value="recent">최근 등록순</option>
             <option value="currentLocation">현재 위치순</option>
@@ -243,7 +268,11 @@ export function MovingTransferSection() {
         {filteredItems.length === 0 ? (
           <EmptyState
             title="조건에 맞는 이동 항목이 없어요"
-            description="정리하거나 이동할 품목을 추가하거나 필터를 조정해보세요."
+            description={
+              isReadOnly
+                ? "필터를 조정해보세요."
+                : "정리하거나 이동할 품목을 추가하거나 필터를 조정해보세요."
+            }
           />
         ) : (
           <>
@@ -252,7 +281,8 @@ export function MovingTransferSection() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th className="table-col-select">
+                      {!isReadOnly ? (
+                        <th className="table-col-select">
                         <div className="table-action-slot">
                           <SelectionCheckbox
                             aria-label="현재 목록 전체 선택"
@@ -261,21 +291,25 @@ export function MovingTransferSection() {
                             onChange={() => toggleSelectAll()}
                           />
                         </div>
-                      </th>
+                        </th>
+                      ) : null}
                       <th className="table-col-status">상태</th>
                       <th className="table-col-left">품목명</th>
                       <th className="table-col-left">현재 위치</th>
                       <th className="table-col-left">이동할 위치</th>
                       <th className="table-col-left">메모</th>
-                      <th className="table-col-actions">
-                        <span className="sr-only">행 동작</span>
-                      </th>
+                      {!isReadOnly ? (
+                        <th className="table-col-actions">
+                          <span className="sr-only">행 동작</span>
+                        </th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredItems.map((item) => (
                       <tr key={item.id}>
-                        <td className="table-col-select">
+                        {!isReadOnly ? (
+                          <td className="table-col-select">
                           <div className="table-action-slot">
                             <SelectionCheckbox
                               aria-label={`${item.name} 선택`}
@@ -283,7 +317,8 @@ export function MovingTransferSection() {
                               onChange={() => toggleItemSelection(item.id)}
                             />
                           </div>
-                        </td>
+                          </td>
+                        ) : null}
                         <td className="table-col-status">
                           <StatusBadge tone={MOVE_ITEM_STATUS_TONES[item.status]}>
                             {MOVE_ITEM_STATUS_LABELS[item.status]}
@@ -305,7 +340,8 @@ export function MovingTransferSection() {
                             "-"
                           )}
                         </td>
-                        <td className="table-col-actions">
+                        {!isReadOnly ? (
+                          <td className="table-col-actions">
                           <div className="table-action-slot">
                             <RowActionMenu
                               description={`${item.currentLocation} → ${item.targetLocation}`}
@@ -315,7 +351,8 @@ export function MovingTransferSection() {
                               onEdit={() => startEdit(item)}
                             />
                           </div>
-                        </td>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -329,15 +366,17 @@ export function MovingTransferSection() {
                   key={item.id}
                   className="planner-mobile-card relative p-4 sm:p-5"
                 >
-                  <div className="absolute left-4 top-4 z-10">
+                  {!isReadOnly ? (
+                    <div className="absolute left-4 top-4 z-10">
                     <SelectionCheckbox
                       aria-label={`${item.name} 선택`}
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleItemSelection(item.id)}
                     />
-                  </div>
+                    </div>
+                  ) : null}
 
-                  <div className="pl-8 pr-12">
+                  <div className={isReadOnly ? "pr-4" : "pl-8 pr-12"}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -359,14 +398,16 @@ export function MovingTransferSection() {
                     </div>
                   </div>
 
-                  <RowActionMenu
-                    description={`${item.currentLocation} → ${item.targetLocation}`}
-                    label={item.name}
-                    mode="mobile"
-                    onDelete={() => requestDelete(item)}
-                    onEdit={() => startEdit(item)}
-                    triggerClassName="absolute right-4 top-4"
-                  />
+                  {!isReadOnly ? (
+                    <RowActionMenu
+                      description={`${item.currentLocation} → ${item.targetLocation}`}
+                      label={item.name}
+                      mode="mobile"
+                      onDelete={() => requestDelete(item)}
+                      onEdit={() => startEdit(item)}
+                      triggerClassName="absolute right-4 top-4"
+                    />
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -374,13 +415,14 @@ export function MovingTransferSection() {
         )}
       </div>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingItem ? "이동 항목 수정" : "이동 항목 추가"}
-        description="현재 위치와 이동할 위치를 함께 정리해두면 이사 당일 동선이 훨씬 깔끔해져요."
-        onClose={() => setIsDialogOpen(false)}
-      >
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingItem ? "이동 항목 수정" : "이동 항목 추가"}
+          description="현재 위치와 이동할 위치를 함께 정리해두면 이사 당일 동선이 훨씬 깔끔해져요."
+          onClose={() => setIsDialogOpen(false)}
+        >
+          <form className="grid gap-4" onSubmit={handleSubmit}>
           <Field label="품목명">
             <TextInput
               required
@@ -469,8 +511,9 @@ export function MovingTransferSection() {
             onCancel={() => setIsDialogOpen(false)}
             submitLabel={editingItem ? "수정 저장" : "이동 항목 추가"}
           />
-        </form>
-      </FormDialog>
+          </form>
+        </FormDialog>
+      ) : null}
     </>
   );
 }

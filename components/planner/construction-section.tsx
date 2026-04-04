@@ -81,6 +81,7 @@ export function ConstructionSection() {
   const {
     data,
     isReady,
+    isReadOnly,
     addPurchase,
     updatePurchase,
   } = usePlannerData();
@@ -372,9 +373,11 @@ export function ConstructionSection() {
       </div>
 
       <SurfaceCard>
-        <SectionHeader action={<Button onClick={startCreate}>시공 항목 추가</Button>} />
+        <SectionHeader
+          action={!isReadOnly ? <Button onClick={startCreate}>시공 항목 추가</Button> : undefined}
+        />
 
-        {selectedConstructionIds.length > 0 ? (
+        {!isReadOnly && selectedConstructionIds.length > 0 ? (
           <div className="mt-4">
             <BulkActionBar
               count={selectedConstructionIds.length}
@@ -404,41 +407,47 @@ export function ConstructionSection() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th className="table-col-select">
-                          <div className="table-action-slot">
-                            <SelectionCheckbox
-                              aria-label="현재 목록 전체 선택"
-                              checked={isAllVisibleSelected}
-                              indeterminate={isSomeVisibleSelected}
-                              onChange={() => toggleSelectAllConstructions()}
-                            />
-                          </div>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-select">
+                            <div className="table-action-slot">
+                              <SelectionCheckbox
+                                aria-label="현재 목록 전체 선택"
+                                checked={isAllVisibleSelected}
+                                indeterminate={isSomeVisibleSelected}
+                                onChange={() => toggleSelectAllConstructions()}
+                              />
+                            </div>
+                          </th>
+                        ) : null}
                         <th className="table-col-status">상태</th>
                         <th className="table-col-left">시공명</th>
                         <th className="table-col-left">공간</th>
                         <th className="table-col-date">일정</th>
                         <th className="table-col-amount">비용</th>
                         <th className="table-col-left">업체</th>
-                        <th className="table-col-actions">
-                          <span className="sr-only">행 동작</span>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-actions">
+                            <span className="sr-only">행 동작</span>
+                          </th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
                       {sortedConstructions.map((construction) => (
                         <tr key={construction.id}>
-                          <td className="table-col-select">
-                            <div className="table-action-slot">
-                              <SelectionCheckbox
-                                aria-label={`${construction.name} 선택`}
-                                checked={selectedConstructionIds.includes(construction.id)}
-                                onChange={() =>
-                                  toggleConstructionSelection(construction.id)
-                                }
-                              />
-                            </div>
-                          </td>
+                          {!isReadOnly ? (
+                            <td className="table-col-select">
+                              <div className="table-action-slot">
+                                <SelectionCheckbox
+                                  aria-label={`${construction.name} 선택`}
+                                  checked={selectedConstructionIds.includes(construction.id)}
+                                  onChange={() =>
+                                    toggleConstructionSelection(construction.id)
+                                  }
+                                />
+                              </div>
+                            </td>
+                          ) : null}
                           <td className="table-col-status">
                             <StatusBadge
                               tone={
@@ -483,21 +492,23 @@ export function ConstructionSection() {
                               </p>
                             </div>
                           </td>
-                          <td className="table-col-actions">
-                            <div className="table-action-slot">
-                              <RowActionMenu
-                                description={
-                                  construction.constructionCompany
-                                    ? `${construction.room} · ${construction.constructionCompany}`
-                                    : construction.room
-                                }
-                                label={construction.name}
-                                mode="desktop"
-                                onDelete={() => requestDelete(construction)}
-                                onEdit={() => startEdit(construction)}
-                              />
-                            </div>
-                          </td>
+                          {!isReadOnly ? (
+                            <td className="table-col-actions">
+                              <div className="table-action-slot">
+                                <RowActionMenu
+                                  description={
+                                    construction.constructionCompany
+                                      ? `${construction.room} · ${construction.constructionCompany}`
+                                      : construction.room
+                                  }
+                                  label={construction.name}
+                                  mode="desktop"
+                                  onDelete={() => requestDelete(construction)}
+                                  onEdit={() => startEdit(construction)}
+                                />
+                              </div>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -511,15 +522,17 @@ export function ConstructionSection() {
                     key={construction.id}
                     className="planner-mobile-card relative p-4 sm:p-5"
                   >
-                    <div className="absolute left-4 top-4 z-10">
-                      <SelectionCheckbox
-                        aria-label={`${construction.name} 선택`}
-                        checked={selectedConstructionIds.includes(construction.id)}
-                        onChange={() => toggleConstructionSelection(construction.id)}
-                      />
-                    </div>
+                    {!isReadOnly ? (
+                      <div className="absolute left-4 top-4 z-10">
+                        <SelectionCheckbox
+                          aria-label={`${construction.name} 선택`}
+                          checked={selectedConstructionIds.includes(construction.id)}
+                          onChange={() => toggleConstructionSelection(construction.id)}
+                        />
+                      </div>
+                    ) : null}
 
-                    <div className="pl-8 pr-12">
+                    <div className={isReadOnly ? "pr-4" : "pl-8 pr-12"}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -578,18 +591,20 @@ export function ConstructionSection() {
                       </div>
                     </div>
 
-                    <RowActionMenu
-                      description={
-                        construction.constructionCompany
-                          ? `${construction.room} · ${construction.constructionCompany}`
-                          : construction.room
-                      }
-                      label={construction.name}
-                      mode="mobile"
-                      onDelete={() => requestDelete(construction)}
-                      onEdit={() => startEdit(construction)}
-                      triggerClassName="absolute right-4 top-4"
-                    />
+                    {!isReadOnly ? (
+                      <RowActionMenu
+                        description={
+                          construction.constructionCompany
+                            ? `${construction.room} · ${construction.constructionCompany}`
+                            : construction.room
+                        }
+                        label={construction.name}
+                        mode="mobile"
+                        onDelete={() => requestDelete(construction)}
+                        onEdit={() => startEdit(construction)}
+                        triggerClassName="absolute right-4 top-4"
+                      />
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -598,12 +613,13 @@ export function ConstructionSection() {
         </div>
       </SurfaceCard>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingConstruction ? "시공 항목 수정" : "시공 항목 추가"}
-        description="시공일과 비용, 업체 정보를 함께 기록해두면 관리가 쉬워져요."
-        onClose={() => setIsDialogOpen(false)}
-      >
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingConstruction ? "시공 항목 수정" : "시공 항목 추가"}
+          description="시공일과 비용, 업체 정보를 함께 기록해두면 관리가 쉬워져요."
+          onClose={() => setIsDialogOpen(false)}
+        >
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <Field label="시공명">
             <TextInput
@@ -796,7 +812,8 @@ export function ConstructionSection() {
             submitLabel={editingConstruction ? "수정 저장" : "시공 항목 추가"}
           />
         </form>
-      </FormDialog>
+        </FormDialog>
+      ) : null}
     </div>
   );
 }

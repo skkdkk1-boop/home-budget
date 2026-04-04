@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { shiftDate, todayKey } from "@/lib/planner-utils";
 
@@ -8,6 +8,7 @@ import { MovingDisposalSection } from "./moving-disposal-section";
 import { usePlannerData } from "./planner-provider";
 import { MovingSalesSection } from "./moving-sales-section";
 import { MovingTransferSection } from "./moving-transfer-section";
+import { usePlannerQueryState } from "./use-planner-query-state";
 import {
   LoadingState,
   SegmentedControl,
@@ -38,7 +39,12 @@ const movingTabs: Array<{
 
 export function MovingSection() {
   const { data, isReady } = usePlannerData();
-  const [activeTab, setActiveTab] = useState<MovingTabId>("sell");
+  const { getValue, setValues } = usePlannerQueryState();
+  const activeTab = getValue<MovingTabId>("tab", "sell", [
+    "sell",
+    "dispose",
+    "move",
+  ]);
   const movingSummaryCards = useMemo(() => {
     const today = todayKey();
     const urgentLimit = shiftDate(3);
@@ -100,7 +106,7 @@ export function MovingSection() {
                 key={tab.id}
                 active={activeTab === tab.id}
                 className="h-10 w-full sm:w-auto"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setValues({ tab: tab.id }, { tab: "sell" })}
               >
                 {tab.label}
               </SegmentedControlButton>

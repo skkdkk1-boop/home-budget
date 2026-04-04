@@ -40,9 +40,11 @@ import {
 } from "@/lib/planner-utils";
 import { usePlannerAuth } from "./auth-provider";
 
-interface PlannerContextValue {
+export interface PlannerContextValue {
   data: PlannerData;
   isReady: boolean;
+  isReadOnly: boolean;
+  routeBasePath: string;
   summary: ReturnType<typeof buildDashboardSummary>;
   addFund: (input: FundFormValues) => void;
   updateFund: (id: string, input: FundFormValues) => void;
@@ -69,7 +71,7 @@ interface PlannerContextValue {
   deleteMoveItems: (ids: string[]) => void;
 }
 
-const PlannerContext = createContext<PlannerContextValue | null>(null);
+export const PlannerContext = createContext<PlannerContextValue | null>(null);
 
 function normalizeFundInput(input: FundFormValues) {
   return {
@@ -599,6 +601,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       value={{
         data,
         isReady,
+        isReadOnly: false,
+        routeBasePath: "",
         summary,
         addFund,
         updateFund,

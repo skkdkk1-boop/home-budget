@@ -42,7 +42,7 @@ const emptyFundForm: FundFormState = {
 };
 
 export function FundsSection() {
-  const { data, isReady, summary, addFund, updateFund, deleteFund } =
+  const { data, isReady, isReadOnly, summary, addFund, updateFund, deleteFund } =
     usePlannerData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
@@ -131,7 +131,9 @@ export function FundsSection() {
       </div>
 
       <SurfaceCard>
-        <SectionHeader action={<Button onClick={startCreate}>자금 추가</Button>} />
+        <SectionHeader
+          action={!isReadOnly ? <Button onClick={startCreate}>자금 추가</Button> : undefined}
+        />
 
         <div className="mt-4">
           {sortedFunds.length === 0 ? (
@@ -150,9 +152,11 @@ export function FundsSection() {
                         <th className="table-col-amount">금액</th>
                         <th className="table-col-status">사용 여부</th>
                         <th className="table-col-date">최근 수정</th>
-                        <th className="table-col-actions">
-                          <span className="sr-only">행 동작</span>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-actions">
+                            <span className="sr-only">행 동작</span>
+                          </th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -174,19 +178,21 @@ export function FundsSection() {
                           <td className="table-col-date text-[var(--text-secondary)]">
                             {formatDate(fund.updatedAt.slice(0, 10))}
                           </td>
-                          <td className="table-col-actions">
-                            <div className="table-action-slot">
-                              <RowActionMenu
-                                description={
-                                  fund.isUsable ? "사용 가능 자금" : "참고용 자금"
-                                }
-                                label={fund.name}
-                                mode="desktop"
-                                onDelete={() => requestDelete(fund)}
-                                onEdit={() => startEdit(fund)}
-                              />
-                            </div>
-                          </td>
+                          {!isReadOnly ? (
+                            <td className="table-col-actions">
+                              <div className="table-action-slot">
+                                <RowActionMenu
+                                  description={
+                                    fund.isUsable ? "사용 가능 자금" : "참고용 자금"
+                                  }
+                                  label={fund.name}
+                                  mode="desktop"
+                                  onDelete={() => requestDelete(fund)}
+                                  onEdit={() => startEdit(fund)}
+                                />
+                              </div>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -220,16 +226,18 @@ export function FundsSection() {
                       </p>
                     </div>
 
-                    <RowActionMenu
-                      description={
-                        fund.isUsable ? "사용 가능 자금" : "참고용 자금"
-                      }
-                      label={fund.name}
-                      mode="mobile"
-                      onDelete={() => requestDelete(fund)}
-                      onEdit={() => startEdit(fund)}
-                      triggerClassName="absolute right-4 top-4"
-                    />
+                    {!isReadOnly ? (
+                      <RowActionMenu
+                        description={
+                          fund.isUsable ? "사용 가능 자금" : "참고용 자금"
+                        }
+                        label={fund.name}
+                        mode="mobile"
+                        onDelete={() => requestDelete(fund)}
+                        onEdit={() => startEdit(fund)}
+                        triggerClassName="absolute right-4 top-4"
+                      />
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -238,73 +246,75 @@ export function FundsSection() {
         </div>
       </SurfaceCard>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingFund ? "자금 수정" : "자금 추가"}
-        description="이름과 금액, 사용 가능 여부만 입력하면 바로 반영됩니다."
-        onClose={() => setIsDialogOpen(false)}
-      >
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="자금 이름">
-              <TextInput
-                required
-                placeholder="예: 비상금 통장"
-                value={form.name}
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingFund ? "자금 수정" : "자금 추가"}
+          description="이름과 금액, 사용 가능 여부만 입력하면 바로 반영됩니다."
+          onClose={() => setIsDialogOpen(false)}
+        >
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="자금 이름">
+                <TextInput
+                  required
+                  placeholder="예: 비상금 통장"
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+
+              <Field label="금액">
+                <MoneyInput
+                  required
+                  value={form.amount}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      amount: value,
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+
+            <Field label="사용 가능 여부">
+              <SelectInput
+                value={form.isUsable ? "true" : "false"}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    name: event.target.value,
+                    isUsable: event.target.value === "true",
                   }))
                 }
-              />
+              >
+                <option value="true">사용 가능 자금</option>
+                <option value="false">참고용 자금</option>
+              </SelectInput>
             </Field>
 
-            <Field label="금액">
-              <MoneyInput
-                required
-                value={form.amount}
-                onValueChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    amount: value,
-                  }))
-                }
-              />
-            </Field>
-          </div>
-
-          <Field label="사용 가능 여부">
-            <SelectInput
-              value={form.isUsable ? "true" : "false"}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  isUsable: event.target.value === "true",
-                }))
+            <ValuePreviewPanel
+              caption={
+                form.isUsable
+                  ? "실제 남은 자금 계산에 포함돼요."
+                  : "총 자금에는 포함되지만 사용 가능 자금에는 제외돼요."
               }
-            >
-              <option value="true">사용 가능 자금</option>
-              <option value="false">참고용 자금</option>
-            </SelectInput>
-          </Field>
+              label="미리보기"
+              value={formatCurrency(parseMoneyInput(form.amount))}
+            />
 
-          <ValuePreviewPanel
-            caption={
-              form.isUsable
-                ? "실제 남은 자금 계산에 포함돼요."
-                : "총 자금에는 포함되지만 사용 가능 자금에는 제외돼요."
-            }
-            label="미리보기"
-            value={formatCurrency(parseMoneyInput(form.amount))}
-          />
-
-          <DialogActions
-            onCancel={() => setIsDialogOpen(false)}
-            submitLabel={editingFund ? "수정 저장" : "자금 추가"}
-          />
-        </form>
-      </FormDialog>
+            <DialogActions
+              onCancel={() => setIsDialogOpen(false)}
+              submitLabel={editingFund ? "수정 저장" : "자금 추가"}
+            />
+          </form>
+        </FormDialog>
+      ) : null}
     </div>
   );
 }

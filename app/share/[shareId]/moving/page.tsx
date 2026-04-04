@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
-import { PurchasesSection } from "@/components/planner/purchases-section";
+import { MovingSection } from "@/components/planner/moving-section";
 import { LoadingState } from "@/components/planner/ui";
 
-export default function PurchasesPage() {
+export default function SharedMovingPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function PurchasesPage() {
         </div>
       }
     >
-      <PurchasesSection />
+      <MovingSection />
     </Suspense>
   );
 }

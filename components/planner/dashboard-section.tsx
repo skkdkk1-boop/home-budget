@@ -26,7 +26,8 @@ import {
 } from "./ui";
 
 export function DashboardSection() {
-  const { isReady, summary } = usePlannerData();
+  const { isReady, routeBasePath, summary } = usePlannerData();
+  const basePath = routeBasePath || "";
 
   if (!isReady) {
     return (
@@ -137,7 +138,10 @@ export function DashboardSection() {
         <SurfaceCard>
           <PanelHeader
             action={
-              <Link href="/shipping" className="planner-link text-sm font-semibold">
+              <Link
+                href={`${basePath}/shipping`}
+                className="planner-link text-sm font-semibold"
+              >
                 전체 보기
               </Link>
             }
@@ -195,7 +199,7 @@ export function DashboardSection() {
           <PanelHeader
             action={
               <Link
-                href="/construction"
+                href={`${basePath}/construction`}
                 className="planner-link text-sm font-semibold"
               >
                 전체 보기

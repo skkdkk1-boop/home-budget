@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -153,7 +154,9 @@ export function PlannerAppLayout({
                     <SummaryChip className="hidden max-w-[12rem] truncate sm:inline-flex">
                       {displayName}
                     </SummaryChip>
-                    <ShareLinkButton />
+                    <Suspense fallback={null}>
+                      <ShareLinkButton />
+                    </Suspense>
                     <Button
                       size="sm"
                       variant="secondary"

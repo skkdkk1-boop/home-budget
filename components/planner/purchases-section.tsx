@@ -45,6 +45,7 @@ import {
 } from "@/lib/planner-utils";
 
 import { usePlannerData } from "./planner-provider";
+import { usePlannerQueryState } from "./use-planner-query-state";
 import {
   BulkActionBar,
   Button,
@@ -280,6 +281,7 @@ export function PurchasesSection() {
   const {
     data,
     isReady,
+    isReadOnly,
     addPurchase,
     addPurchases,
     updatePurchase,
@@ -287,6 +289,7 @@ export function PurchasesSection() {
     deletePurchase,
     deletePurchases,
   } = usePlannerData();
+  const { getValue, setValues } = usePlannerQueryState();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -302,13 +305,25 @@ export function PurchasesSection() {
   const [multiTableError, setMultiTableError] = useState<string | null>(null);
   const [bulkInputText, setBulkInputText] = useState("");
   const [bulkInputError, setBulkInputError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const searchTerm = getValue("q", "");
   const deferredSearchTerm = useDeferredValue(searchTerm);
-  const [roomFilter, setRoomFilter] = useState<Room | "all">("all");
-  const [categoryFilter, setCategoryFilter] =
-    useState<PurchaseCategory | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<PurchaseStatus | "all">("all");
-  const [sortBy, setSortBy] = useState<PurchaseSortOption>("recent");
+  const roomFilter = getValue<Room | "all">("room", "all", [
+    ...ROOM_OPTIONS,
+    "all",
+  ]);
+  const categoryFilter = getValue<PurchaseCategory | "all">("category", "all", [
+    ...PURCHASE_CATEGORY_OPTIONS,
+    "all",
+  ]);
+  const statusFilter = getValue<PurchaseStatus | "all">("status", "all", [
+    ...PURCHASE_STATUS_OPTIONS,
+    "all",
+  ]);
+  const sortBy = getValue<PurchaseSortOption>("sort", "recent", [
+    "recent",
+    "priceHigh",
+    "priceLow",
+  ]);
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<"planned" | "completed">(
     "planned",
@@ -715,11 +730,22 @@ export function PurchasesSection() {
   };
 
   const resetFilters = () => {
-    setSearchTerm("");
-    setRoomFilter("all");
-    setCategoryFilter("all");
-    setStatusFilter("all");
-    setSortBy("recent");
+    setValues(
+      {
+        q: "",
+        room: "all",
+        category: "all",
+        status: "all",
+        sort: "recent",
+      },
+      {
+        q: "",
+        room: "all",
+        category: "all",
+        status: "all",
+        sort: "recent",
+      },
+    );
   };
 
   if (!isReady) {
@@ -754,7 +780,9 @@ export function PurchasesSection() {
 
       <SurfaceCard>
         <SectionHeader
-          action={<Button onClick={startCreate}>구매 항목 추가</Button>}
+          action={
+            !isReadOnly ? <Button onClick={startCreate}>구매 항목 추가</Button> : undefined
+          }
         />
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(13rem,1.5fr)_repeat(4,minmax(7rem,0.92fr))_auto] lg:items-end">
@@ -763,7 +791,9 @@ export function PurchasesSection() {
               <TextInput
                 placeholder="예: 냉장고"
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) =>
+                  setValues({ q: event.target.value }, { q: "" })
+                }
               />
             </Field>
           </div>
@@ -772,7 +802,12 @@ export function PurchasesSection() {
             <Field label="공간">
               <SelectInput
                 value={roomFilter}
-                onChange={(event) => setRoomFilter(event.target.value as Room | "all")}
+                onChange={(event) =>
+                  setValues(
+                    { room: event.target.value as Room | "all" },
+                    { room: "all" },
+                  )
+                }
               >
                 <option value="all">전체 공간</option>
                 {ROOM_OPTIONS.map((room) => (
@@ -789,7 +824,10 @@ export function PurchasesSection() {
               <SelectInput
                 value={categoryFilter}
                 onChange={(event) =>
-                  setCategoryFilter(event.target.value as PurchaseCategory | "all")
+                  setValues(
+                    { category: event.target.value as PurchaseCategory | "all" },
+                    { category: "all" },
+                  )
                 }
               >
                 <option value="all">전체 분류</option>
@@ -807,7 +845,10 @@ export function PurchasesSection() {
               <SelectInput
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as PurchaseStatus | "all")
+                  setValues(
+                    { status: event.target.value as PurchaseStatus | "all" },
+                    { status: "all" },
+                  )
                 }
               >
                 <option value="all">전체 상태</option>
@@ -825,7 +866,10 @@ export function PurchasesSection() {
               <SelectInput
                 value={sortBy}
                 onChange={(event) =>
-                  setSortBy(event.target.value as PurchaseSortOption)
+                  setValues(
+                    { sort: event.target.value as PurchaseSortOption },
+                    { sort: "recent" },
+                  )
                 }
               >
                 <option value="recent">최근 등록순</option>
@@ -844,7 +888,7 @@ export function PurchasesSection() {
           </Button>
         </div>
 
-        {selectedPurchaseIds.length > 0 ? (
+        {!isReadOnly && selectedPurchaseIds.length > 0 ? (
           <div className="mt-4">
             <BulkActionBar
               count={selectedPurchaseIds.length}
@@ -874,7 +918,11 @@ export function PurchasesSection() {
           {filteredPurchases.length === 0 ? (
             <EmptyState
               title="조건에 맞는 구매 항목이 없어요"
-              description="검색어나 필터를 조정하거나 새로운 구매 항목을 추가해보세요."
+              description={
+                isReadOnly
+                  ? "검색어나 필터를 조정해보세요."
+                  : "검색어나 필터를 조정하거나 새로운 구매 항목을 추가해보세요."
+              }
             />
           ) : (
             <>
@@ -883,16 +931,18 @@ export function PurchasesSection() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th className="table-col-select">
-                          <div className="table-action-slot">
-                            <SelectionCheckbox
-                              aria-label="현재 목록 전체 선택"
-                              checked={isAllVisibleSelected}
-                              indeterminate={isSomeVisibleSelected}
-                              onChange={() => toggleSelectAllPurchases()}
-                            />
-                          </div>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-select">
+                            <div className="table-action-slot">
+                              <SelectionCheckbox
+                                aria-label="현재 목록 전체 선택"
+                                checked={isAllVisibleSelected}
+                                indeterminate={isSomeVisibleSelected}
+                                onChange={() => toggleSelectAllPurchases()}
+                              />
+                            </div>
+                          </th>
+                        ) : null}
                         <th className="table-col-status">상태</th>
                         <th className="table-col-left">품목</th>
                         <th className="table-col-left">공간 / 유형</th>
@@ -900,23 +950,27 @@ export function PurchasesSection() {
                         <th className="table-col-amount">총액</th>
                         <th className="table-col-payment">결제방식</th>
                         <th className="table-col-link">링크</th>
-                        <th className="table-col-actions">
-                          <span className="sr-only">행 동작</span>
-                        </th>
+                        {!isReadOnly ? (
+                          <th className="table-col-actions">
+                            <span className="sr-only">행 동작</span>
+                          </th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredPurchases.map((purchase) => (
                         <tr key={purchase.id}>
-                          <td className="table-col-select">
-                            <div className="table-action-slot">
-                              <SelectionCheckbox
-                                aria-label={`${purchase.name} 선택`}
-                                checked={selectedPurchaseIds.includes(purchase.id)}
-                                onChange={() => togglePurchaseSelection(purchase.id)}
-                              />
-                            </div>
-                          </td>
+                          {!isReadOnly ? (
+                            <td className="table-col-select">
+                              <div className="table-action-slot">
+                                <SelectionCheckbox
+                                  aria-label={`${purchase.name} 선택`}
+                                  checked={selectedPurchaseIds.includes(purchase.id)}
+                                  onChange={() => togglePurchaseSelection(purchase.id)}
+                                />
+                              </div>
+                            </td>
+                          ) : null}
                           <td className="table-col-status">
                             <StatusBadge tone={PURCHASE_STATUS_TONES[purchase.status]}>
                               {PURCHASE_STATUS_LABELS[purchase.status]}
@@ -983,17 +1037,19 @@ export function PurchasesSection() {
                               <span className="text-[var(--text-muted)]">-</span>
                             )}
                           </td>
-                          <td className="table-col-actions">
-                            <div className="table-action-slot">
-                              <RowActionMenu
-                                description={`${purchase.room} · ${purchase.category}`}
-                                label={purchase.name}
-                                mode="desktop"
-                                onDelete={() => requestDelete(purchase)}
-                                onEdit={() => startEdit(purchase)}
-                              />
-                            </div>
-                          </td>
+                          {!isReadOnly ? (
+                            <td className="table-col-actions">
+                              <div className="table-action-slot">
+                                <RowActionMenu
+                                  description={`${purchase.room} · ${purchase.category}`}
+                                  label={purchase.name}
+                                  mode="desktop"
+                                  onDelete={() => requestDelete(purchase)}
+                                  onEdit={() => startEdit(purchase)}
+                                />
+                              </div>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -1007,16 +1063,20 @@ export function PurchasesSection() {
                     key={purchase.id}
                     className="planner-mobile-card relative p-4 sm:p-5"
                   >
-                    <div className="absolute left-4 top-4 z-10">
-                      <SelectionCheckbox
-                        aria-label={`${purchase.name} 선택`}
-                        checked={selectedPurchaseIds.includes(purchase.id)}
-                        onChange={() => togglePurchaseSelection(purchase.id)}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </div>
+                    {!isReadOnly ? (
+                      <div className="absolute left-4 top-4 z-10">
+                        <SelectionCheckbox
+                          aria-label={`${purchase.name} 선택`}
+                          checked={selectedPurchaseIds.includes(purchase.id)}
+                          onChange={() => togglePurchaseSelection(purchase.id)}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </div>
+                    ) : null}
 
-                    <summary className="list-none cursor-pointer pl-8 pr-12">
+                    <summary
+                      className={`list-none cursor-pointer ${isReadOnly ? "pr-4" : "pl-8 pr-12"}`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1044,14 +1104,16 @@ export function PurchasesSection() {
                         </div>
                       </div>
                     </summary>
-                    <RowActionMenu
-                      description={`${purchase.room} · ${purchase.category}`}
-                      label={purchase.name}
-                      mode="mobile"
-                      onDelete={() => requestDelete(purchase)}
-                      onEdit={() => startEdit(purchase)}
-                      triggerClassName="absolute right-4 top-4"
-                    />
+                    {!isReadOnly ? (
+                      <RowActionMenu
+                        description={`${purchase.room} · ${purchase.category}`}
+                        label={purchase.name}
+                        mode="mobile"
+                        onDelete={() => requestDelete(purchase)}
+                        onEdit={() => startEdit(purchase)}
+                        triggerClassName="absolute right-4 top-4"
+                      />
+                    ) : null}
 
                     <div className="mt-4 border-t border-[var(--border)] pt-4">
                       <div className="space-y-3">
@@ -1114,14 +1176,15 @@ export function PurchasesSection() {
         </div>
       </SurfaceCard>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingPurchase ? "구매 항목 수정" : "구매 항목 추가"}
-        description="핵심 정보만 먼저 입력하고, 필요한 정보만 상세 설정에서 이어서 추가하세요."
-        onClose={() => setIsDialogOpen(false)}
-        panelClassName="max-w-[58rem]"
-        bodyClassName="px-4 py-4 sm:px-5 sm:py-5"
-      >
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingPurchase ? "구매 항목 수정" : "구매 항목 추가"}
+          description="핵심 정보만 먼저 입력하고, 필요한 정보만 상세 설정에서 이어서 추가하세요."
+          onClose={() => setIsDialogOpen(false)}
+          panelClassName="max-w-[58rem]"
+          bodyClassName="px-4 py-4 sm:px-5 sm:py-5"
+        >
         <form className="grid gap-4 sm:gap-5" onSubmit={handleSubmit}>
           {!editingPurchase ? (
             <SegmentedControl>
@@ -1899,7 +1962,8 @@ export function PurchasesSection() {
             }
           />
         </form>
-      </FormDialog>
+        </FormDialog>
+      ) : null}
     </div>
   );
 }

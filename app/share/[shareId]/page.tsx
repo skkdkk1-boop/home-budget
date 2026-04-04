@@ -1,11 +1,11 @@
-import { SharedPlannerPage } from "@/components/planner/shared-planner-page";
+import { DashboardSection } from "@/components/planner/dashboard-section";
 
 export default async function SharePage({
   params,
 }: {
   params: Promise<{ shareId: string }>;
 }) {
-  const { shareId } = await params;
+  await params;
 
-  return <SharedPlannerPage shareId={shareId} />;
+  return <DashboardSection />;
 }

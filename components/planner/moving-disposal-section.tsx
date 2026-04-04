@@ -28,6 +28,7 @@ import {
 } from "@/lib/planner-utils";
 
 import { usePlannerData } from "./planner-provider";
+import { usePlannerQueryState } from "./use-planner-query-state";
 import {
   BulkActionBar,
   Button,
@@ -67,17 +68,30 @@ function createEmptyDisposalForm(): DisposalFormState {
 export function MovingDisposalSection() {
   const {
     data,
+    isReadOnly,
     addDisposalItem,
     updateDisposalItem,
     deleteDisposalItem,
     deleteDisposalItems,
   } = usePlannerData();
+  const { getValue, setValues } = usePlannerQueryState();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<DisposalItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [locationFilter, setLocationFilter] = useState<SellLocation | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<DisposalStatus | "all">("all");
-  const [sortBy, setSortBy] = useState<DisposalItemSortOption>("recent");
+  const locationFilter = getValue<SellLocation | "all">("disposeLocation", "all", [
+    ...SELL_LOCATION_OPTIONS,
+    "all",
+  ]);
+  const statusFilter = getValue<DisposalStatus | "all">("disposeStatus", "all", [
+    ...DISPOSAL_STATUS_OPTIONS,
+    "all",
+  ]);
+  const sortBy = getValue<DisposalItemSortOption>("disposeSort", "recent", [
+    "recent",
+    "deadline",
+    "costHigh",
+    "costLow",
+  ]);
   const [form, setForm] = useState<DisposalFormState>(createEmptyDisposalForm);
 
   const filteredItems = useMemo(() => {
@@ -208,9 +222,11 @@ export function MovingDisposalSection() {
 
   return (
     <>
-      <SectionHeader action={<Button onClick={startCreate}>폐기 항목 추가</Button>} />
+      <SectionHeader
+        action={!isReadOnly ? <Button onClick={startCreate}>폐기 항목 추가</Button> : undefined}
+      />
 
-      {selectedIds.length > 0 ? (
+      {!isReadOnly && selectedIds.length > 0 ? (
         <div className="mt-4">
           <BulkActionBar count={selectedIds.length} onClear={clearSelection}>
             <Button size="sm" variant="danger" onClick={handleBulkDelete}>
@@ -225,7 +241,10 @@ export function MovingDisposalSection() {
           <SelectInput
             value={locationFilter}
             onChange={(event) =>
-              setLocationFilter(event.target.value as SellLocation | "all")
+              setValues(
+                { disposeLocation: event.target.value as SellLocation | "all" },
+                { disposeLocation: "all" },
+              )
             }
           >
             <option value="all">전체 위치</option>
@@ -241,7 +260,10 @@ export function MovingDisposalSection() {
           <SelectInput
             value={statusFilter}
             onChange={(event) =>
-              setStatusFilter(event.target.value as DisposalStatus | "all")
+              setValues(
+                { disposeStatus: event.target.value as DisposalStatus | "all" },
+                { disposeStatus: "all" },
+              )
             }
           >
             <option value="all">전체 상태</option>
@@ -256,7 +278,12 @@ export function MovingDisposalSection() {
         <Field label="정렬">
           <SelectInput
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as DisposalItemSortOption)}
+            onChange={(event) =>
+              setValues(
+                { disposeSort: event.target.value as DisposalItemSortOption },
+                { disposeSort: "recent" },
+              )
+            }
           >
             <option value="recent">최근 등록순</option>
             <option value="deadline">예정일순</option>
@@ -270,7 +297,11 @@ export function MovingDisposalSection() {
         {filteredItems.length === 0 ? (
           <EmptyState
             title="조건에 맞는 폐기 항목이 없어요"
-            description="폐기할 품목을 추가하거나 필터를 조정해보세요."
+            description={
+              isReadOnly
+                ? "필터를 조정해보세요."
+                : "폐기할 품목을 추가하거나 필터를 조정해보세요."
+            }
           />
         ) : (
           <>
@@ -279,7 +310,8 @@ export function MovingDisposalSection() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th className="table-col-select">
+                      {!isReadOnly ? (
+                        <th className="table-col-select">
                         <div className="table-action-slot">
                           <SelectionCheckbox
                             aria-label="현재 목록 전체 선택"
@@ -288,7 +320,8 @@ export function MovingDisposalSection() {
                             onChange={() => toggleSelectAll()}
                           />
                         </div>
-                      </th>
+                        </th>
+                      ) : null}
                       <th className="table-col-status">상태</th>
                       <th className="table-col-left">품목명</th>
                       <th className="table-col-left">현재 위치</th>
@@ -297,15 +330,18 @@ export function MovingDisposalSection() {
                       <th className="table-col-amount">비용</th>
                       <th className="table-col-date">폐기 예정일</th>
                       <th className="table-col-left">메모</th>
-                      <th className="table-col-actions">
-                        <span className="sr-only">행 동작</span>
-                      </th>
+                      {!isReadOnly ? (
+                        <th className="table-col-actions">
+                          <span className="sr-only">행 동작</span>
+                        </th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredItems.map((item) => (
                       <tr key={item.id}>
-                        <td className="table-col-select">
+                        {!isReadOnly ? (
+                          <td className="table-col-select">
                           <div className="table-action-slot">
                             <SelectionCheckbox
                               aria-label={`${item.name} 선택`}
@@ -313,7 +349,8 @@ export function MovingDisposalSection() {
                               onChange={() => toggleItemSelection(item.id)}
                             />
                           </div>
-                        </td>
+                          </td>
+                        ) : null}
                         <td className="table-col-status">
                           <StatusBadge tone={DISPOSAL_STATUS_TONES[item.status]}>
                             {DISPOSAL_STATUS_LABELS[item.status]}
@@ -344,7 +381,8 @@ export function MovingDisposalSection() {
                             "-"
                           )}
                         </td>
-                        <td className="table-col-actions">
+                        {!isReadOnly ? (
+                          <td className="table-col-actions">
                           <div className="table-action-slot">
                             <RowActionMenu
                               description={`${item.currentLocation} · ${DISPOSAL_STATUS_LABELS[item.status]}`}
@@ -354,7 +392,8 @@ export function MovingDisposalSection() {
                               onEdit={() => startEdit(item)}
                             />
                           </div>
-                        </td>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -368,15 +407,17 @@ export function MovingDisposalSection() {
                   key={item.id}
                   className="planner-mobile-card relative p-4 sm:p-5"
                 >
-                  <div className="absolute left-4 top-4 z-10">
-                    <SelectionCheckbox
-                      aria-label={`${item.name} 선택`}
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => toggleItemSelection(item.id)}
-                    />
-                  </div>
+                  {!isReadOnly ? (
+                    <div className="absolute left-4 top-4 z-10">
+                      <SelectionCheckbox
+                        aria-label={`${item.name} 선택`}
+                        checked={selectedIds.includes(item.id)}
+                        onChange={() => toggleItemSelection(item.id)}
+                      />
+                    </div>
+                  ) : null}
 
-                  <div className="pl-8 pr-12">
+                  <div className={isReadOnly ? "pr-4" : "pl-8 pr-12"}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -408,14 +449,16 @@ export function MovingDisposalSection() {
                     </div>
                   </div>
 
-                  <RowActionMenu
-                    description={`${item.currentLocation} · ${DISPOSAL_STATUS_LABELS[item.status]}`}
-                    label={item.name}
-                    mode="mobile"
-                    onDelete={() => requestDelete(item)}
-                    onEdit={() => startEdit(item)}
-                    triggerClassName="absolute right-4 top-4"
-                  />
+                  {!isReadOnly ? (
+                    <RowActionMenu
+                      description={`${item.currentLocation} · ${DISPOSAL_STATUS_LABELS[item.status]}`}
+                      label={item.name}
+                      mode="mobile"
+                      onDelete={() => requestDelete(item)}
+                      onEdit={() => startEdit(item)}
+                      triggerClassName="absolute right-4 top-4"
+                    />
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -423,13 +466,14 @@ export function MovingDisposalSection() {
         )}
       </div>
 
-      <FormDialog
-        open={isDialogOpen}
-        title={editingItem ? "폐기 항목 수정" : "폐기 항목 추가"}
-        description="폐기 방법과 예정일을 함께 적어두면 예약과 비용을 놓치지 않기 쉬워져요."
-        onClose={() => setIsDialogOpen(false)}
-      >
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+      {!isReadOnly ? (
+        <FormDialog
+          open={isDialogOpen}
+          title={editingItem ? "폐기 항목 수정" : "폐기 항목 추가"}
+          description="폐기 방법과 예정일을 함께 적어두면 예약과 비용을 놓치지 않기 쉬워져요."
+          onClose={() => setIsDialogOpen(false)}
+        >
+          <form className="grid gap-4" onSubmit={handleSubmit}>
           <Field label="품목명">
             <TextInput
               required
@@ -565,8 +609,9 @@ export function MovingDisposalSection() {
             onCancel={() => setIsDialogOpen(false)}
             submitLabel={editingItem ? "수정 저장" : "폐기 항목 추가"}
           />
-        </form>
-      </FormDialog>
+          </form>
+        </FormDialog>
+      ) : null}
     </>
   );
 }
