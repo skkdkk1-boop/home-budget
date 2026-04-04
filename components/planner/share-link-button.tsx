@@ -17,7 +17,6 @@ export function ShareLinkButton() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
-  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
 
   const canCreate = Boolean(user && isAuthReady && isPlannerReady && !isSubmitting);
   const hasShareLink = shareUrl.length > 0;
@@ -25,7 +24,6 @@ export function ShareLinkButton() {
   function resetDialog() {
     setOpen(false);
     setShareUrl("");
-    setCopyState("idle");
     setIsSubmitting(false);
   }
 
@@ -37,7 +35,6 @@ export function ShareLinkButton() {
 
     try {
       setIsSubmitting(true);
-      setCopyState("idle");
 
       const result = await createPlannerShareSnapshot(user.id, data);
 
@@ -72,7 +69,7 @@ export function ShareLinkButton() {
 
     try {
       await navigator.clipboard.writeText(shareUrl);
-      setCopyState("copied");
+      resetDialog();
     } catch (error) {
       console.error(error);
       window.prompt("아래 링크를 복사해주세요.", shareUrl);
@@ -94,6 +91,7 @@ export function ShareLinkButton() {
         title="읽기 전용 공유 링크"
         description="현재 화면의 데이터를 읽기 전용 스냅샷으로 만들어 다른 사람에게 보낼 수 있어요."
         onClose={resetDialog}
+        mobilePosition="center"
         panelClassName="max-w-xl"
       >
         <div className="space-y-4">
@@ -121,7 +119,7 @@ export function ShareLinkButton() {
                   새 링크 만들기
                 </Button>
                 <Button variant="primary" onClick={() => void handleCopyShareUrl()}>
-                  {copyState === "copied" ? "복사 완료" : "링크 복사"}
+                  링크 복사
                 </Button>
               </div>
             </div>

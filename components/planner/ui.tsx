@@ -581,6 +581,7 @@ export function FormDialog({
   title,
   description,
   onClose,
+  mobilePosition = "bottom",
   panelClassName,
   bodyClassName,
   children,
@@ -589,6 +590,7 @@ export function FormDialog({
   title: string;
   description: string;
   onClose: () => void;
+  mobilePosition?: "bottom" | "center";
   panelClassName?: string;
   bodyClassName?: string;
   children: ReactNode;
@@ -621,7 +623,10 @@ export function FormDialog({
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(25,31,40,0.38)] p-0 sm:items-center sm:p-6"
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center bg-[rgba(25,31,40,0.38)] sm:items-center sm:p-6",
+        mobilePosition === "center" ? "items-center p-4" : "items-end p-0",
+      )}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
