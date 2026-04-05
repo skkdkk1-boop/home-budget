@@ -509,11 +509,11 @@ export function PurchasesSection() {
       .slice(0, 24);
   }, [data.purchases]);
   const detailRoomOptions = useMemo(() => {
-    if (ROOM_OPTIONS.includes(form.room as Room)) {
-      return ROOM_OPTIONS;
+    if (PURCHASE_MULTI_ROOM_OPTIONS.includes(form.room as PurchaseRoom)) {
+      return PURCHASE_MULTI_ROOM_OPTIONS;
     }
 
-    return [...ROOM_OPTIONS, form.room] as const;
+    return [...PURCHASE_MULTI_ROOM_OPTIONS, form.room] as const;
   }, [form.room]);
   const purchaseTimelineText = getPurchaseTimelineText(form);
 

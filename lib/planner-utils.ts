@@ -534,23 +534,41 @@ export function deriveConstructionsFromPurchases(purchases: Purchase[]) {
   return purchases.filter(isConstructionPurchase).map(mapPurchaseToConstruction);
 }
 
+function isCommittedPurchase(item: Purchase) {
+  return item.status !== "planned";
+}
+
+function getCurrentPurchaseOutflow(item: Purchase) {
+  if (!isCommittedPurchase(item)) {
+    return 0;
+  }
+
+  return item.paymentType === "installment"
+    ? item.monthlyPayment
+    : item.totalPrice;
+}
+
 export function buildDashboardSummary(data: PlannerData): DashboardSummary {
   const totalFunds = data.funds.reduce((sum, item) => sum + item.amount, 0);
   const usableFunds = data.funds.reduce((sum, item) => {
     return item.isUsable ? sum + item.amount : sum;
   }, 0);
   const completedPurchaseTotal = data.purchases.reduce((sum, item) => {
-    return item.status !== "planned" ? sum + item.totalPrice : sum;
+    return isCommittedPurchase(item) ? sum + item.totalPrice : sum;
   }, 0);
   const plannedPurchaseTotal = data.purchases.reduce((sum, item) => {
     return item.status === "planned" ? sum + item.totalPrice : sum;
   }, 0);
   const installmentMonthlyTotal = data.purchases.reduce((sum, item) => {
-    return item.paymentType === "installment" ? sum + item.monthlyPayment : sum;
+    return isCommittedPurchase(item) && item.paymentType === "installment"
+      ? sum + item.monthlyPayment
+      : sum;
   }, 0);
-  const remainingActual = usableFunds - completedPurchaseTotal;
-  const remainingProjected =
-    usableFunds - completedPurchaseTotal - plannedPurchaseTotal;
+  const currentPurchaseOutflow = data.purchases.reduce((sum, item) => {
+    return sum + getCurrentPurchaseOutflow(item);
+  }, 0);
+  const remainingActual = usableFunds - currentPurchaseOutflow;
+  const remainingProjected = usableFunds - currentPurchaseOutflow;
   const today = todayKey();
   const derivedShippings = deriveShippingsFromPurchases(data.purchases);
   const derivedConstructions = deriveConstructionsFromPurchases(data.purchases);
