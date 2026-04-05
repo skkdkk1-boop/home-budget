@@ -20,6 +20,22 @@ interface PlannerAuthContextValue {
 
 const PlannerAuthContext = createContext<PlannerAuthContextValue | null>(null);
 
+function getCleanRedirectUrl() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const url = new URL(window.location.href);
+
+  ["code", "state", "error", "error_code", "error_description"].forEach((key) => {
+    url.searchParams.delete(key);
+  });
+
+  url.hash = "";
+
+  return url.toString();
+}
+
 export function PlannerAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -74,15 +90,15 @@ export function PlannerAuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Supabase 인증 설정이 아직 연결되지 않았어요.");
         }
 
-        const redirectTo =
-          typeof window === "undefined"
-            ? undefined
-            : window.location.href.split("#")[0] ?? window.location.origin;
+        const redirectTo = getCleanRedirectUrl();
 
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
             redirectTo,
+            queryParams: {
+              prompt: "select_account",
+            },
           },
         });
 
@@ -97,10 +113,16 @@ export function PlannerAuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut({ scope: "local" });
 
         if (error) {
           throw error;
+        }
+
+        const cleanUrl = getCleanRedirectUrl();
+
+        if (cleanUrl && typeof window !== "undefined") {
+          window.history.replaceState({}, "", cleanUrl);
         }
       },
     }),
